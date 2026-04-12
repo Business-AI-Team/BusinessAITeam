@@ -1,4 +1,4 @@
-# Optional AI stack (large downloads). Install after requirements.txt:
+# Pile AI étendue (après requirements.txt : pypdf, chromadb, langchain-openai, etc.).
 #   pip install -r requirements.txt -r requirements-ai.txt
 
 langchain>=0.2
@@ -13,9 +13,5 @@ torchvision>=0.15
 transformers>=4.40
 accelerate>=0.30
 
-# RAG: admin PDFs / images → eligibility rules (Chroma + embeddings + extraction)
-chromadb>=0.4
-sentence-transformers>=2.6
-pypdf>=4.0
-Pillow>=10.0
+# OCR sur images (PNG/JPG de politiques) — optionnel
 pytesseract>=0.3.10

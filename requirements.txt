@@ -1,4 +1,6 @@
-# LoanWise — runtime minimal (hackathon / CI)
+# LoanWise — runtime (hackathon / CI)
+# Inclut toujours extraction PDF (pypdf) + RAG sémantique (Chroma + embeddings).
+
 Django>=4.2,<6
 djangorestframework>=3.14
 drf-spectacular>=0.27
@@ -7,7 +9,20 @@ python-dotenv>=1.0
 Pillow>=10.0
 reportlab>=4.0
 polib>=1.2
-pypdf>=4.0
 openai>=1.0
 
-# Optional: install requirements-ai.txt for LangChain, Florence-2, RAG stack, etc.
+# PDF : texte sélectionnable (fiches de paie, PDF admin, etc.)
+pypdf>=4.0
+# PDF scannés : rendu page → images pour repli Vision si l’API Responses échoue
+pymupdf>=1.24.0
+
+# RAG LangChain : Document → split → OpenAIEmbeddings → Chroma → similarity_search
+# https://docs.langchain.com/oss/python/langchain/rag
+langchain-core>=0.3
+langchain-chroma>=0.2
+langchain-text-splitters>=0.3
+langchain-openai>=0.2
+chromadb>=0.4
+
+# LangChain + LangGraph + torch — voir requirements-ai.txt
+#   pip install -r requirements.txt -r requirements-ai.txt

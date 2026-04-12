@@ -284,8 +284,8 @@ msgstr ""
 "E-mail ou code de vérification invalide. Vérifiez le code reçu par e-mail et"
 " réessayez."
 
-msgid "LangGraph · Florence-2"
-msgstr "LangGraph · Florence-2"
+msgid "LangGraph · OpenAI"
+msgstr "LangGraph · OpenAI"
 
 msgid "Language"
 msgstr "Langue"

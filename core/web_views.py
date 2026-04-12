@@ -26,7 +26,7 @@ from core.document_requirement_service import (
     requirements_for_application,
     seed_default_requirements,
 )
-from core.models import LoanApplication
+from core.models import Language, LoanApplication, LoanType
 from core.portal import can_access_all_applications, get_loan_application_for_portal, is_backoffice_user
 from core.rag_eligibility import get_eligibility_guidance_from_rag
 
@@ -218,13 +218,18 @@ def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
         )
     matrix_script_data = {"slots": matrix_slots}
 
+    roi = app.roi_summary or {}
     ctx = {
         "application": app,
+        "lw_loan_type_choices": LoanType.choices,
+        "lw_language_choices": Language.choices,
         "lw_portal_backoffice": app.user_id != request.user.id and can_access_all_applications(request.user),
         "lw_applicant_email": app.user.email if app.user_id else "",
         "lw_initial_progress": application_pipeline_progress_percent(app),
         "lw_rag_eligibility": rag_guidance,
         "lw_rag_summary": rag_summary,
+        "lw_eligibility_detail": roi.get("eligibility_detail"),
+        "lw_detail_lang": lang,
         "lw_email_verified": request.user.email_verified,
         "lw_require_email": django_settings.LOANWISE_REQUIRE_EMAIL_VERIFICATION,
         "lw_analysis_rows": analysis_rows_for_template(app),

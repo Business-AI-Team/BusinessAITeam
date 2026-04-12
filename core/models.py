@@ -1,5 +1,5 @@
 """
-LoanWise domain models: users, loan applications, documents, and AI chat history.
+LoanWise domain models: users, loan applications, documents, and optional chat history (legacy).
 
 All monetary amounts use Decimal; sensitive document bytes are never stored long-term:
 files are hashed (SHA-256), analyzed, then removed per security policy.
@@ -19,7 +19,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Language(models.TextChoices):
-    """Supported UI and AI agent languages."""
+    """Supported UI languages for the application."""
 
     FRENCH = "fr", _("French")
     ENGLISH = "en", _("English")
@@ -306,6 +306,16 @@ class LoanApplication(models.Model):
                     self.customer_id = c.pk
         super().save(*args, **kwargs)
 
+    def has_complete_financial_profile(self) -> bool:
+        """Declared income and loan amount are set (> 0) so the deterministic score is meaningful."""
+        if self.annual_income is None or self.amount_requested is None:
+            return False
+        if self.annual_income <= 0 or self.amount_requested <= 0:
+            return False
+        if self.term_months is None or self.term_months < 1:
+            return False
+        return True
+
     def __str__(self) -> str:
         return f"{self.reference} ({self.get_status_display()})"
 
@@ -413,7 +423,8 @@ class Notification(models.Model):
 class EligibilityKnowledgeSource(models.Model):
     """
     Admin-managed RAG sources (PDF / images) defining internal eligibility rules.
-    Text is extracted, chunked, and indexed for retrieval (see core.rag_eligibility).
+    Text is extracted, split with LangChain (RecursiveCharacterTextSplitter), embedded
+    with OpenAI via LangChain (OpenAIEmbeddings), stored in Chroma, and retrieved with similarity_search (see core.rag_eligibility).
     ERD name: Eligibility Condition (file).
     """
 

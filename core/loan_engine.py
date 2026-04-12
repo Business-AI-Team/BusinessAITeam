@@ -6,11 +6,15 @@ Pure deterministic logic for transparency; tune weights via settings or constant
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
+from core.eligibility_explanation import build_eligibility_detail
 from core.models import LoanApplication
 
 
@@ -18,11 +22,13 @@ def _financial_base_score(application: LoanApplication) -> Decimal:
     """
     Debt-to-income style score 0–100 from declared income, amount, term (deterministic).
 
-    Same inputs always yield the same base (e.g. always 65.76 if nothing else changes).
+    Zéro / absent = données manquantes → score 0 (on n’utilise plus de « faux 1 € » qui faussait le ratio).
     """
-    income = application.annual_income or Decimal("1")
-    amount = application.amount_requested or Decimal("1")
-    months = max(1, application.term_months)
+    if not application.has_complete_financial_profile():
+        return Decimal("0")
+    income = application.annual_income
+    amount = application.amount_requested
+    months = max(1, application.term_months or 12)
     rate = Decimal(str(getattr(settings, "LOANWISE_INTEREST_RATE_ANNUAL", 0.05)))
     monthly_rate = rate / Decimal("12")
     if monthly_rate > 0:
@@ -55,11 +61,11 @@ def compute_roi_and_impact(application: LoanApplication) -> tuple[dict[str, Any]
 
     Returns (roi_summary, business_impact).
     """
-    amount = application.amount_requested
-    months = application.term_months
+    amount = application.amount_requested or Decimal("0")
+    months = application.term_months or 12
     rate = Decimal(str(getattr(settings, "LOANWISE_INTEREST_RATE_ANNUAL", 0.05)))
     monthly_rate = rate / Decimal("12")
-    if monthly_rate > 0 and months > 0:
+    if monthly_rate > 0 and months and months > 0:
         pow_term = (Decimal("1") + monthly_rate) ** months
         total_repay = amount * (monthly_rate * pow_term) / (pow_term - Decimal("1")) * Decimal(months)
     else:
@@ -99,10 +105,15 @@ def compute_roi_and_impact(application: LoanApplication) -> tuple[dict[str, Any]
 
 
 def run_eligibility_for_application(application: LoanApplication) -> LoanApplication:
-    """Persist score, ROI, and impact on the application row."""
+    """Persist score, ROI, impact, and structured eligibility explanation on the application row."""
     score = compute_eligibility_score(application)
-    roi, impact = compute_roi_and_impact(application)
     application.eligibility_score = score
+    roi, impact = compute_roi_and_impact(application)
+    try:
+        roi["eligibility_detail"] = build_eligibility_detail(application)
+    except Exception as exc:
+        logger.warning("build_eligibility_detail failed: %s", exc)
+        roi["eligibility_detail"] = {"error": "explanation_unavailable"}
     application.roi_summary = roi
     application.business_impact = impact
     application.save(

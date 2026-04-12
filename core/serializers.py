@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from core.models import ApplicationDocument, ChatMessage, DocumentRequirement, LoanApplication, PortalRole
+from core.models import ApplicationDocument, DocumentRequirement, LoanApplication, PortalRole
 
 User = get_user_model()
 
@@ -138,7 +138,7 @@ class LoanApplicationSerializer(serializers.ModelSerializer):
 
 
 class LoanApplicationWriteSerializer(serializers.ModelSerializer):
-    """Create/update loan application from API."""
+    """Create/update loan application from API (formulaire web, pas de chat)."""
 
     class Meta:
         model = LoanApplication
@@ -150,12 +150,22 @@ class LoanApplicationWriteSerializer(serializers.ModelSerializer):
             "annual_income",
             "purpose",
             "due_date",
+            "current_step",
         )
-        extra_kwargs = {"language": {"required": False}, "due_date": {"required": False}}
+        extra_kwargs = {
+            "language": {"required": False},
+            "due_date": {"required": False},
+            "current_step": {"required": False},
+        }
 
     def validate_amount_requested(self, value: Decimal) -> Decimal:
         if value < 0:
-            raise serializers.ValidationError(_("Amount must be positive."))
+            raise serializers.ValidationError(_("Amount must be positive or zero."))
+        return value
+
+    def validate_annual_income(self, value: Decimal) -> Decimal:
+        if value < 0:
+            raise serializers.ValidationError(_("Annual income cannot be negative."))
         return value
 
 
@@ -175,16 +185,6 @@ class ApplicationDocumentSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
-
-
-class ChatMessageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ChatMessage
-        fields = ("id", "role", "content", "step_hint", "metadata", "created_at")
-
-
-class ChatSendSerializer(serializers.Serializer):
-    message = serializers.CharField(max_length=8000)
 
 
 class UserPreferencesSerializer(serializers.Serializer):

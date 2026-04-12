@@ -16,7 +16,7 @@ LoanWise is a **Django + DRF** hackathon project: **API-first** REST backend, **
 | **Auth** | Registration, **email verification** (token link), **hashed passwords** (Django default). |
 | **Documents** | **SHA-256** fingerprinting; optional **delete after analysis** (`LOANWISE_DELETE_FILES_AFTER_ANALYSIS`). |
 | **Requirements** | Dynamic, DB-driven **document requirements** per loan type (extensible). |
-| **AI** | Configurable **LangGraph** bridge + step machine; **DeepFace** (optional); **Florence-2** (optional); **LLM** via **OpenAI** or offline templates. |
+| **AI** | Configurable **LangGraph** bridge + step machine; **OpenAI** (vision, chat, RAG extraction) when a key is set (env or Admin); offline templates otherwise. |
 | **Business** | **ROI / impact** JSON on each application; **PDF** report (ReportLab). |
 | **UX** | Dashboard, per-application workspace, **progress** indicators, structured API errors. |
 
@@ -58,13 +58,13 @@ Email verification links in development use the **console email backend** (link 
 
 ### 4. Optional AI dependencies
 
-Heavy packages (LangChain, PyTorch, Transformers, DeepFace) are listed in `requirements-ai.txt`:
+RAG in `requirements.txt` uses **LangChain** with **OpenAI embeddings** (`OpenAIEmbeddings`) and Chroma. Heavier extras (PyTorch, LangGraph, etc.) are in `requirements-ai.txt`:
 
 ```bash
 pip install -r requirements-ai.txt
 ```
 
-Then configure `.env` (`LOANWISE_LLM_PROVIDER=openai`, `OPENAI_API_KEY`). Without them, the app runs in **demo mode** (template replies and Florence/DeepFace fallbacks).
+Then configure `.env` (`LOANWISE_LLM_PROVIDER=openai`, `OPENAI_API_KEY`) or add the key in **Admin → Integration settings**. Without a key, the app runs in **demo mode** (template replies and document analysis fallback).
 
 ---
 
@@ -90,8 +90,7 @@ python scripts/build_i18n.py
 - `POST /api/auth/login/` — returns `{ "token": "...", "user": {...} }`.  
 - `GET/PATCH /api/auth/me/` — profile (e.g. `preferred_language`, `theme_preference`).  
 - `GET/POST /api/applications/` — list/create loan applications.  
-- `POST /api/applications/{id}/chat/` — `{ "message": "..." }`.  
-- `GET /api/applications/{id}/messages/` — chat history.  
+- `PATCH /api/applications/{id}/` — update loan details (`loan_type`, `language`, `amount_requested`, `term_months`, `annual_income`, `purpose`, …).  
 - `POST /api/documents/upload/{application_id}/` — multipart `file`, optional `requirement_id`, `kind`.  
 - `POST /api/applications/{id}/orchestrate/` — full pipeline (requires **verified email**).  
 - `GET /api/applications/{id}/export_pdf/` — PDF download.  

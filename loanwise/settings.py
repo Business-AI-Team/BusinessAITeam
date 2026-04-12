@@ -177,20 +177,26 @@ LOANWISE_DELETE_FILES_AFTER_ANALYSIS = os.environ.get("LOANWISE_DELETE_FILES_AFT
     "true",
     "yes",
 )
-# Florence-2 (heavy GPU/CPU load); keep off unless explicitly enabled (see requirements-ai.txt).
-LOANWISE_ENABLE_FLORENCE = _env_bool("LOANWISE_ENABLE_FLORENCE", default=False)
-
-# OpenAI: use OPENAI_API_KEY in the environment and/or Integration settings in Django Admin
-# (see core.openai_config.get_openai_api_key).
+# OpenAI: OPENAI_API_KEY env and/or Integration settings in Django Admin (see core.openai_config.get_openai_api_key).
 
 # LLM: openai | none
 LOANWISE_LLM_PROVIDER = os.environ.get("LOANWISE_LLM_PROVIDER", "none")
 LOANWISE_OPENAI_MODEL = os.environ.get("LOANWISE_OPENAI_MODEL", "gpt-4o-mini")
-# Vision model for identity / document images (gpt-4o-mini supports images).
+# Vision model for document images (gpt-4o-mini supports images).
 LOANWISE_OPENAI_VISION_MODEL = os.environ.get("LOANWISE_OPENAI_VISION_MODEL", "gpt-4o-mini")
-# Document analysis: openai | florence | fallback | auto (OpenAI if get_openai_api_key(), else …)
+# PDF natif via Responses API (input_file). Vide = même valeur que LOANWISE_OPENAI_VISION_MODEL.
+LOANWISE_OPENAI_PDF_MODEL = (os.environ.get("LOANWISE_OPENAI_PDF_MODEL") or "").strip() or None
+# Document analysis: openai | fallback | auto (OpenAI Vision if get_openai_api_key(), else fallback)
 LOANWISE_DOCUMENT_ANALYSIS_BACKEND = (os.environ.get("LOANWISE_DOCUMENT_ANALYSIS_BACKEND") or "auto").strip().lower()
 LOANWISE_USE_LANGGRAPH = os.environ.get("LOANWISE_USE_LANGGRAPH", "false").lower() in ("1", "true", "yes")
+
+# RAG : embeddings uniquement via OpenAI (LangChain OpenAIEmbeddings) — OPENAI_API_KEY / Admin.
+LOANWISE_RAG_OPENAI_EMBEDDING_MODEL = os.environ.get(
+    "LOANWISE_RAG_OPENAI_EMBEDDING_MODEL",
+    "text-embedding-3-small",
+).strip()
+# Texte politique concaténé envoyé au LLM (extraction + décision LangChain) — évite les coupures trop agressives.
+LOANWISE_RAG_LLM_MAX_CHARS = int(os.environ.get("LOANWISE_RAG_LLM_MAX_CHARS", "120000"))
 
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"

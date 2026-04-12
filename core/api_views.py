@@ -21,12 +21,10 @@ from rest_framework.views import APIView
 
 from core.document_requirement_service import label_for, seed_default_requirements
 from core.email_verification_service import send_registration_verification_email, verify_email_with_code, verify_email_with_token
-from core.loan_chatbot_agent import run_chat_turn
 from core.loan_orchestrator_agent import run_orchestration
 from core.portal import can_access_all_applications
 from core.models import (
     ApplicationDocument,
-    ChatMessage,
     DocumentKind,
     DocumentRequirement,
     EmailVerificationToken,
@@ -36,8 +34,6 @@ from core.pdf_report import build_application_pdf
 from core.security_utils import sha256_file
 from core.serializers import (
     ApplicationDocumentSerializer,
-    ChatMessageSerializer,
-    ChatSendSerializer,
     DocumentRequirementSerializer,
     LoanApplicationSerializer,
     LoanApplicationWriteSerializer,
@@ -147,7 +143,11 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         lang = serializer.validated_data.get("language") or self.request.user.preferred_language or "fr"
-        serializer.save(user=self.request.user, language=lang)
+        serializer.save(user=self.request.user, language=lang, current_step="documents")
+
+    def perform_update(self, serializer):
+        """Le formulaire web remplace le chat : après saisie, étape documents."""
+        serializer.save(current_step="documents")
 
     def create(self, request, *args, **kwargs):
         """Return full application payload (incl. id, reference) after create — needed by the web UI."""
@@ -159,20 +159,6 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         out = LoanApplicationSerializer(instance, context=self.get_serializer_context())
         headers = self.get_success_headers(out.data)
         return Response(out.data, status=status.HTTP_201_CREATED, headers=headers)
-
-    @action(detail=True, methods=["post"])
-    def chat(self, request, pk=None):
-        app = self.get_object()
-        ser = ChatSendSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        reply = run_chat_turn(app, ser.validated_data["message"])
-        return Response({"reply": reply})
-
-    @action(detail=True, methods=["get"])
-    def messages(self, request, pk=None):
-        app = self.get_object()
-        qs = ChatMessage.objects.filter(application=app)
-        return Response(ChatMessageSerializer(qs, many=True).data)
 
     @action(detail=True, methods=["post"])
     def orchestrate(self, request, pk=None):

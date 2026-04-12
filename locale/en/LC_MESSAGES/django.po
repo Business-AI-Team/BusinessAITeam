@@ -280,8 +280,8 @@ msgstr ""
 "Invalid email or verification code. Check the code in your email and try "
 "again."
 
-msgid "LangGraph · Florence-2"
-msgstr "LangGraph · Florence-2"
+msgid "LangGraph · OpenAI"
+msgstr "LangGraph · OpenAI"
 
 msgid "Language"
 msgstr "Language"

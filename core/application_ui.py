@@ -9,7 +9,7 @@ from core.models import LoanApplication, LoanApplicationStatus
 
 def application_pipeline_progress_percent(application: LoanApplication) -> int:
     """
-    Approximate progress for the progress bar (matches chat/doc/orchestration reality).
+    Approximate progress for the progress bar (formulaire + documents + orchestration).
 
     100% only when scoring has run (eligibility_score set) or terminal workflow state.
     """
@@ -19,11 +19,11 @@ def application_pipeline_progress_percent(application: LoanApplication) -> int:
     if st in (LoanApplicationStatus.VALIDATED, LoanApplicationStatus.REJECTED):
         return 100
 
-    n_msg = application.chat_messages.count()
     n_doc = application.documents.count()
 
-    p = 8
-    p += min(40, n_msg * 4)
+    p = 15
+    if application.has_complete_financial_profile():
+        p = 42
     p += min(42, n_doc * 9)
 
     step = application.current_step or ""

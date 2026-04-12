@@ -42,7 +42,7 @@ FR = {
     "Documents": "Documents",
     "SHA-256 + auto-delete": "SHA-256 + suppression auto",
     "AI stack": "Stack IA",
-    "LangGraph · Florence-2": "LangGraph · Florence-2",
+    "LangGraph · OpenAI": "LangGraph · OpenAI",
     "Languages": "Langues",
     "FR · EN": "FR · EN",
     "Eligibility preview": "Aperçu d'éligibilité",
@@ -77,6 +77,9 @@ FR = {
     "Principal": "Capital",
     "Figures are indicative for the hackathon demo.": "Chiffres indicatifs pour la démo hackathon.",
     "Complete the chat steps, upload documents, then run the AI pipeline.": "Terminez le chat, téléversez les documents, puis lancez le pipeline IA.",
+    "Save your loan details, upload documents, then run the AI pipeline.": (
+        "Enregistrez les informations du prêt, téléversez les documents, puis lancez le pipeline IA."
+    ),
     "Completed": "Terminé",
     "Please verify your email before running the pipeline.": "Vérifiez votre e-mail avant de lancer le pipeline.",
     # login / register

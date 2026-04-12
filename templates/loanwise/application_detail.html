@@ -1,5 +1,5 @@
 {% extends "loanwise/base.html" %}
-{% load i18n static %}
+{% load i18n static l10n %}
 
 {% block title %}{{ application.reference }} — {{ block.super }}{% endblock %}
 
@@ -76,6 +76,82 @@
   </div>
   {% endif %}
 
+  {% if lw_eligibility_detail and not lw_eligibility_detail.error %}
+  <div class="animate-fade-in-up rounded-2xl border border-slate-300/90 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-900/90">
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Evaluation detail" %}</h2>
+    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+      {% trans "Combines computed score, financial ratios, and policy excerpts from your administrator’s documents (RAG)." %}
+    </p>
+    {% if lw_detail_lang|slice:':2' == 'fr' %}
+    <p class="mt-3 text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-100">{{ lw_eligibility_detail.summary_fr }}</p>
+    <ul class="mt-3 list-disc space-y-1.5 pl-5 text-sm text-slate-700 dark:text-slate-300">
+      {% for line in lw_eligibility_detail.financial_bullets_fr %}<li>{{ line }}</li>{% endfor %}
+      {% for line in lw_eligibility_detail.policy_bullets_fr %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-3 text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-100">{{ lw_eligibility_detail.summary_en }}</p>
+    <ul class="mt-3 list-disc space-y-1.5 pl-5 text-sm text-slate-700 dark:text-slate-300">
+      {% for line in lw_eligibility_detail.financial_bullets_en %}<li>{{ line }}</li>{% endfor %}
+      {% for line in lw_eligibility_detail.policy_bullets_en %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <dl class="mt-4 flex flex-wrap gap-4 text-sm">
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">{% trans "Score" %}</dt>
+        <dd class="font-semibold tabular-nums">{{ lw_eligibility_detail.score }} / 100</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">{% trans "Threshold" %}</dt>
+        <dd class="font-semibold tabular-nums">{{ lw_eligibility_detail.threshold }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-slate-500">{% trans "Decision" %}</dt>
+        <dd class="font-semibold">
+          {% if lw_eligibility_detail.decision == 'validated' %}
+          <span class="text-emerald-700 dark:text-emerald-400">{% trans "Eligible (indicative)" %}</span>
+          {% else %}
+          <span class="text-rose-700 dark:text-rose-400">{% trans "Not eligible (indicative)" %}</span>
+          {% endif %}
+        </dd>
+      </div>
+    </dl>
+    {% if lw_eligibility_detail.llm and not lw_eligibility_detail.llm.unavailable %}
+    <div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+      <p class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{% trans "OpenAI synthesis (LangChain)" %}</p>
+      <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        {% trans "Indicative decision from the written policy documents and uploaded file analyses (no separate form fields sent to the model)." %}
+        —
+        <span class="font-medium text-slate-700 dark:text-slate-300">{{ lw_eligibility_detail.llm.llm_decision }}</span>
+        ({{ lw_eligibility_detail.llm.confidence }})
+      </p>
+      {% if lw_detail_lang|slice:':2' == 'fr' %}
+      <p class="mt-2 text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-100">{{ lw_eligibility_detail.llm.summary_fr }}</p>
+      {% if lw_eligibility_detail.llm.notes_fr %}<p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{{ lw_eligibility_detail.llm.notes_fr }}</p>{% endif %}
+      <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-300">
+        {% for line in lw_eligibility_detail.llm.detail_bullets_fr %}<li>{{ line }}</li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="mt-2 text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-100">{{ lw_eligibility_detail.llm.summary_en }}</p>
+      {% if lw_eligibility_detail.llm.notes_en %}<p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{{ lw_eligibility_detail.llm.notes_en }}</p>{% endif %}
+      <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-300">
+        {% for line in lw_eligibility_detail.llm.detail_bullets_en %}<li>{{ line }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% elif lw_eligibility_detail.llm and lw_eligibility_detail.llm.unavailable %}
+    <p class="mt-4 text-xs text-amber-700 dark:text-amber-300">{% trans "OpenAI synthesis unavailable." %} {{ lw_eligibility_detail.llm.error }}</p>
+    {% endif %}
+    {% if lw_portal_backoffice and lw_eligibility_detail.rag_snippets %}
+    <div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+      <p class="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">{% trans "Policy excerpts (RAG)" %}</p>
+      {% for snip in lw_eligibility_detail.rag_snippets %}
+      <p class="mt-2 border-l-2 border-violet-400/70 pl-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{{ snip }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <!-- Progress -->
   <div class="animate-fade-in-up animate-delay-1 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
     <div class="mb-4 flex items-center justify-between">
@@ -124,26 +200,55 @@
   {% endif %}
 
   <div class="grid gap-8 lg:grid-cols-2">
-    <!-- Chat -->
-    <div class="animate-fade-in-up animate-delay-2 flex flex-col rounded-2xl border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80" style="min-height: 420px">
-      <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "AI assistant" %}</h2>
-        <p class="text-xs text-slate-500">{% trans "Step-by-step guidance in your language." %}</p>
-      </div>
-      <div class="flex-1 space-y-3 overflow-y-auto p-4 text-sm" id="chat-box">
-        <template x-for="m in messages" :key="m.id">
-          <div class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
-            <div class="max-w-[90%] rounded-2xl px-3 py-2"
-                 :class="m.role === 'user' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'"
-                 x-text="m.content"></div>
-          </div>
-        </template>
-      </div>
-      <form class="border-t border-slate-200 p-3 dark:border-slate-800" @submit.prevent="sendChat()">
-        <div class="flex gap-2">
-          <input x-model="input" class="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="{% trans 'Type your message…' %}">
-          <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-sky-600">{% trans "Send" %}</button>
+    <!-- Loan details form (replaces chat) -->
+    <div class="animate-fade-in-up animate-delay-2 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Loan details" %}</h2>
+      <p class="mt-1 text-xs text-slate-500">{% trans "Fill in all fields before running document analysis and scoring." %}</p>
+      <form class="mt-4 space-y-4" @submit.prevent="saveLoanForm($event)">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_loan_type">{% trans "Loan type" %}</label>
+          <select name="loan_type" id="id_loan_type" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+            {% for val, lbl in lw_loan_type_choices %}
+            <option value="{{ val }}" {% if application.loan_type == val %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
         </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_language">{% trans "Language" %}</label>
+          <select name="language" id="id_language" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+            {% for val, lbl in lw_language_choices %}
+            <option value="{{ val }}" {% if application.language == val %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_amount">{% trans "Amount requested" %}</label>
+            <input name="amount_requested" id="id_amount" type="text" inputmode="decimal" required
+                   value="{{ application.amount_requested|unlocalize }}"
+                   class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950" autocomplete="off">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_term">{% trans "Term (months)" %}</label>
+            <input name="term_months" id="id_term" type="number" min="1" max="600" required
+                   value="{{ application.term_months|unlocalize }}"
+                   class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_income">{% trans "Annual income" %}</label>
+          <input name="annual_income" id="id_income" type="text" inputmode="decimal" required
+                 value="{{ application.annual_income|unlocalize }}"
+                 class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950" autocomplete="off">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_purpose">{% trans "Purpose" %}</label>
+          <textarea name="purpose" id="id_purpose" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">{{ application.purpose }}</textarea>
+        </div>
+        <button type="submit" class="w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500 disabled:opacity-50" :disabled="formBusy">
+          <span x-show="!formBusy">{% trans "Save" %}</span>
+          <span x-show="formBusy" x-cloak>{% trans "Saving…" %}</span>
+        </button>
       </form>
     </div>
 
@@ -189,12 +294,11 @@
       requireEmail: !!opts.requireEmail,
       emailVerified: !!opts.emailVerified,
       csrf: '',
-      input: '',
-      messages: [],
+      formBusy: false,
       busy: false,
       progressPct: ip,
       statusLabel: '{{ application.get_status_display|escapejs }}',
-      progressHint: '{% filter escapejs %}{% trans "Complete the chat steps, upload documents, then run the AI pipeline." %}{% endfilter %}',
+      progressHint: '{% filter escapejs %}{% trans "Save your loan details, upload documents, then run the AI pipeline." %}{% endfilter %}',
       getCookie(name) {
         const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
         return v ? decodeURIComponent(v[2]) : '';
@@ -210,28 +314,49 @@
         if (data.detail !== undefined && data.detail !== null) return String(data.detail);
         return '';
       },
-      async init() {
-        await this.loadMessages();
+      parseDecimal(v) {
+        if (v === null || v === undefined || v === '') return '0';
+        const s = String(v).trim().replace(/\s/g, '').replace(',', '.');
+        const n = parseFloat(s);
+        return Number.isFinite(n) ? String(n) : '0';
       },
-      async loadMessages() {
-        const res = await fetch('/api/applications/' + this.appId + '/messages/', { credentials: 'same-origin' });
-        if (res.ok) this.messages = await res.json();
-      },
-      async sendChat() {
-        if (!this.input.trim()) return;
-        const res = await fetch('/api/applications/' + this.appId + '/chat/', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
-          body: JSON.stringify({ message: this.input }),
-        });
-        this.input = '';
-        if (res.ok) {
-          const data = await res.json();
-          await this.loadMessages();
-          if (data.reply) {
-            this.progressPct = Math.min(88, this.progressPct + 10);
+      async saveLoanForm(ev) {
+        const form = ev.target;
+        const fd = new FormData(form);
+        const body = {
+          loan_type: fd.get('loan_type') || 'personal',
+          language: fd.get('language') || 'fr',
+          amount_requested: this.parseDecimal(fd.get('amount_requested')),
+          term_months: parseInt(String(fd.get('term_months') || '12'), 10) || 12,
+          annual_income: this.parseDecimal(fd.get('annual_income')),
+          purpose: (fd.get('purpose') || '').toString().slice(0, 2000),
+        };
+        this.formBusy = true;
+        try {
+          const res = await fetch('/api/applications/' + this.appId + '/', {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              'X-CSRFToken': this.getCookie('csrftoken'),
+            },
+            body: JSON.stringify(body),
+          });
+          const text = await res.text();
+          let data = {};
+          try { data = text ? JSON.parse(text) : {}; } catch (e) { data = {}; }
+          if (!res.ok) {
+            alert(this.lwApiErrorDetail(data) || ('HTTP ' + res.status));
+            return;
           }
+          this.progressPct = Math.min(88, Math.max(this.progressPct, 45));
+          window.location.reload();
+        } catch (e) {
+          console.warn('saveLoanForm', e);
+          alert('{% filter escapejs %}{% trans "Could not save. Check your connection." %}{% endfilter %}');
+        } finally {
+          this.formBusy = false;
         }
       },
       async runOrchestrator() {
