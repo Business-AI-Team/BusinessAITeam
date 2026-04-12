@@ -39,61 +39,14 @@ def _financial_base_score(application: LoanApplication) -> Decimal:
     return score.quantize(Decimal("0.01"))
 
 
-def _verification_adjustment(application: LoanApplication) -> Decimal:
-    """
-    Bonus/malus from face + liveness JSON (after pipeline). Zero if no verification data.
-
-    This is what ties the displayed score to DeepFace / liveness outputs; the base above does not use AI.
-    """
-    fv = application.face_verification or {}
-    lv = application.liveness_verification or {}
-    if not isinstance(fv, dict):
-        fv = {}
-    if not isinstance(lv, dict):
-        lv = {}
-    delta = Decimal("0")
-    has_pipeline_signal = False
-
-    if fv:
-        has_pipeline_signal = True
-        if fv.get("skipped"):
-            delta -= Decimal("5")
-        elif fv.get("verified") is True:
-            delta += Decimal("4")
-        elif fv.get("verified") is False and fv.get("error") is None:
-            delta -= Decimal("12")
-
-    if lv.get("engine") == "liveness_opencv_mediapipe":
-        has_pipeline_signal = True
-        if not lv.get("liveness_passed", True):
-            delta -= Decimal("6")
-        if lv.get("face_match") is False:
-            delta -= Decimal("6")
-
-    if lv.get("skipped") and lv.get("reason") == "static_selfie_only":
-        has_pipeline_signal = True
-        delta -= Decimal("3")
-
-    if not has_pipeline_signal:
-        return Decimal("0")
-
-    # Keep adjustment in a reasonable band for demo UX
-    delta = max(Decimal("-25"), min(Decimal("8"), delta))
-    return delta.quantize(Decimal("0.01"))
-
-
 def compute_eligibility_score(application: LoanApplication) -> Decimal:
     """
-    Final 0–100 score = financial base + verification adjustment.
+    Final 0–100 score from declared financials (deterministic).
 
-    The **base** is pure math on your form fields (income, amount, term) — no ML.
-    **Adjustment** uses face/liveness results from the pipeline (DeepFace, OpenCV/MediaPipe).
+    Facial recognition has been removed; score is based on income, amount, and term only.
     """
     base = _financial_base_score(application)
-    adj = _verification_adjustment(application)
-    total = base + adj
-    total = max(Decimal("0"), min(Decimal("100"), total))
-    return total.quantize(Decimal("0.01"))
+    return max(Decimal("0"), min(Decimal("100"), base)).quantize(Decimal("0.01"))
 
 
 def compute_roi_and_impact(application: LoanApplication) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -119,7 +72,6 @@ def compute_roi_and_impact(application: LoanApplication) -> tuple[dict[str, Any]
         )
 
     base = _financial_base_score(application)
-    adj = _verification_adjustment(application)
     final = compute_eligibility_score(application)
     roi_summary = {
         "principal": str(amount),
@@ -130,11 +82,11 @@ def compute_roi_and_impact(application: LoanApplication) -> tuple[dict[str, Any]
         "income_to_loan_ratio_percent": str(roi_pct),
         "currency": getattr(settings, "LOANWISE_CURRENCY", "EUR"),
         "eligibility_financial_base": str(base),
-        "eligibility_verification_adjustment": str(adj),
+        "eligibility_verification_adjustment": "0",
         "eligibility_final": str(final),
         "eligibility_note": (
-            "Financial base uses only income, amount, term (deterministic). "
-            "Adjustment reflects face/liveness pipeline results when present."
+            "Score uses only declared income, amount, and term (deterministic). "
+            "Facial recognition is not used."
         ),
     }
     business_impact = {

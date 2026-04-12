@@ -18,8 +18,16 @@ from django.conf import settings as django_settings
 
 from core.application_ui import application_pipeline_progress_percent
 from core.analysis_display import analysis_rows_for_template
-from core.document_requirement_service import seed_default_requirements
+from core.document_requirement_service import (
+    default_doc_kind_for_requirement_code,
+    description_for,
+    document_counts_by_requirement_code,
+    label_for,
+    requirements_for_application,
+    seed_default_requirements,
+)
 from core.models import LoanApplication
+from core.portal import can_access_all_applications, get_loan_application_for_portal, is_backoffice_user
 from core.rag_eligibility import get_eligibility_guidance_from_rag
 
 
@@ -37,7 +45,7 @@ def home(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def register_page(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
-        return redirect("dashboard")
+        return redirect("backoffice_dashboard" if is_backoffice_user(request.user) else "dashboard")
     if request.method == "POST":
         from core.serializers import RegisterSerializer
 
@@ -83,7 +91,7 @@ def register_page(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def login_page(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
-        return redirect("dashboard")
+        return redirect("backoffice_dashboard" if is_backoffice_user(request.user) else "dashboard")
     if request.method == "POST":
         from django.contrib.auth import authenticate
 
@@ -92,6 +100,8 @@ def login_page(request: HttpRequest) -> HttpResponse:
         user = authenticate(request, username=email, password=password)
         if user:
             login(request, user)
+            if is_backoffice_user(user):
+                return redirect("backoffice_dashboard")
             return redirect("dashboard")
         messages.error(request, _("Invalid email or password."))
     return render(request, "loanwise/login.html")
@@ -105,7 +115,7 @@ def verify_email_page(request: HttpRequest) -> HttpResponse:
     from core.email_verification_service import verify_email_with_code
 
     if request.user.is_authenticated and request.user.email_verified:
-        return redirect("dashboard")
+        return redirect("backoffice_dashboard" if is_backoffice_user(request.user) else "dashboard")
 
     if request.method == "POST":
         email = (request.POST.get("email") or "").strip()
@@ -122,7 +132,7 @@ def verify_email_page(request: HttpRequest) -> HttpResponse:
                 messages.info(request, _("This email was already verified. You are signed in."))
             else:
                 messages.success(request, _("Your email is verified. Welcome!"))
-            return redirect("dashboard")
+            return redirect("backoffice_dashboard" if is_backoffice_user(request.user) else "dashboard")
         if detail == "email_and_code_required":
             messages.error(request, _("Please enter your email and the verification code."))
         elif detail == "invalid_code":
@@ -150,6 +160,8 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     seed_default_requirements()
+    if is_backoffice_user(request.user):
+        return redirect("backoffice_dashboard")
     apps = LoanApplication.objects.filter(user=request.user)[:50]
     return render(
         request,
@@ -159,49 +171,69 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def backoffice_dashboard(request: HttpRequest) -> HttpResponse:
+    """Bank staff: all customers' applications (not Django Admin)."""
+    if not is_backoffice_user(request.user) and not request.user.is_superuser:
+        messages.error(request, _("You do not have access to the backoffice."))
+        return redirect("dashboard")
+    seed_default_requirements()
+    apps = LoanApplication.objects.select_related("user").order_by("-created_at")[:200]
+    return render(
+        request,
+        "loanwise/backoffice/dashboard.html",
+        {"applications": apps},
+    )
+
+
+@login_required
 def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
     seed_default_requirements()
-    app = LoanApplication.objects.filter(pk=pk, user=request.user).first()
+    app = get_loan_application_for_portal(request.user, pk)
     if not app:
         messages.error(request, _("Application not found."))
-        return redirect("dashboard")
+        return redirect("backoffice_dashboard" if can_access_all_applications(request.user) else "dashboard")
     lang = getattr(request.user, "preferred_language", None) or "fr"
     rag_guidance = get_eligibility_guidance_from_rag(app.loan_type or "personal", lang)
     if lang.startswith("fr"):
         rag_summary = (rag_guidance.get("summary_fr") or rag_guidance.get("summary_en") or "").strip()
     else:
         rag_summary = (rag_guidance.get("summary_en") or rag_guidance.get("summary_fr") or "").strip()
+
+    counts = document_counts_by_requirement_code(app)
+    matrix_slots: list[dict] = []
+    for req in requirements_for_application(app):
+        if not req.is_required:
+            continue
+        have = counts.get(req.code, 0)
+        matrix_slots.append(
+            {
+                "requirement_id": req.pk,
+                "code": req.code,
+                "label": label_for(req, lang),
+                "description": description_for(req, lang),
+                "files_needed": max(1, getattr(req, "min_files", 1) or 1),
+                "doc_kind": default_doc_kind_for_requirement_code(req.code),
+                "uploaded": have,
+            }
+        )
+    matrix_script_data = {"slots": matrix_slots}
+
     ctx = {
         "application": app,
+        "lw_portal_backoffice": app.user_id != request.user.id and can_access_all_applications(request.user),
+        "lw_applicant_email": app.user.email if app.user_id else "",
         "lw_initial_progress": application_pipeline_progress_percent(app),
         "lw_rag_eligibility": rag_guidance,
         "lw_rag_summary": rag_summary,
         "lw_email_verified": request.user.email_verified,
         "lw_require_email": django_settings.LOANWISE_REQUIRE_EMAIL_VERIFICATION,
-        # JSON for client-side liveness coach (MediaPipe) — keys must match static/js/loanwise_liveness_realtime.js
         "lw_analysis_rows": analysis_rows_for_template(app),
-        "lw_liveness_msg_dict": {
-            "loading_model": _("Loading face detection model…"),
-            "no_face": _("No face detected — position yourself in front of the camera."),
-            "show_face": _(
-                "Look straight at the camera. Next, we will ask you to turn your head left, then right, then blink."
-            ),
-            "turn_left": _("Turn your head slowly to the left (your left)."),
-            "turn_right": _("Now turn your head slowly to the right (your right)."),
-            "blink": _("Blink your eyes naturally once or twice."),
-            "done": _("Sequence validated — closing the camera and sending your video…"),
-            "uploading_auto": _("Sending the video to the server…"),
-            "video_saved_ok": _("Video received. You can run the AI pipeline to compare it with your ID."),
-            "cancelled": _("Liveness cancelled."),
-            "no_lib": _("Real-time analysis unavailable (MediaPipe did not load). Allow scripts from the CDN or try another browser."),
-        },
+        "matrix_script_data": matrix_script_data,
     }
     if django_settings.DEBUG:
         docs = list(app.documents.all().order_by("-created_at"))
         ctx["lw_ai_debug_json"] = json.dumps(
             {
-                "face_verification": app.face_verification,
-                "liveness_verification": app.liveness_verification,
                 "orchestration_log": app.orchestration_log,
                 "documents": [
                     {

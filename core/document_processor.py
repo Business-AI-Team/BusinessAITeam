@@ -8,10 +8,13 @@ with a deterministic fallback (OCR-less metadata) when the model or GPU is unava
 from __future__ import annotations
 
 import logging
+import mimetypes
 from pathlib import Path
 from typing import Any
 
 from django.conf import settings
+
+from core.openai_config import get_openai_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +62,83 @@ def _get_florence():
     return _florence_model, _florence_processor, _florence_device
 
 
+def _resolve_document_backend() -> str:
+    """auto | openai | florence | fallback"""
+    raw = getattr(settings, "LOANWISE_DOCUMENT_ANALYSIS_BACKEND", "auto") or "auto"
+    raw = str(raw).strip().lower()
+    if raw in ("openai", "florence", "fallback"):
+        return raw
+    # auto
+    if getattr(settings, "OPENAI_API_KEY", ""):
+        return "openai"
+    if _florence_available():
+        return "florence"
+    return "fallback"
+
+
+def _analyze_with_openai_vision(path: Path, language: str) -> dict[str, Any]:
+    """Describe document / ID image via OpenAI Vision API."""
+    api_key = get_openai_api_key()
+    if not api_key:
+        return _fallback_result("openai_no_api_key", language, filename=path.name)
+    try:
+        import base64
+
+        from openai import OpenAI
+    except ImportError:
+        logger.warning("openai package not installed; pip install openai")
+        return _fallback_result("openai_not_installed", language, filename=path.name)
+
+    try:
+        data = path.read_bytes()
+        b64 = base64.standard_b64encode(data).decode("ascii")
+        mime = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+        if mime not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
+            mime = "image/jpeg"
+        data_url = f"data:{mime};base64,{b64}"
+
+        client = OpenAI(api_key=api_key)
+        model = getattr(settings, "LOANWISE_OPENAI_VISION_MODEL", "gpt-4o-mini")
+        if language.startswith("fr"):
+            prompt = (
+                "Tu analyses un document pour un dossier de prêt (CIN, justificatif, etc.). "
+                "Réponds en JSON compact avec les clés: document_type (court), visible_text_summary (résumé du texte visible), "
+                "language_detected, confidence (high/medium/low). Pas de markdown, JSON seul."
+            )
+        else:
+            prompt = (
+                "Analyze this image for a loan application (ID card, payslip, etc.). "
+                "Reply with compact JSON only, keys: document_type, visible_text_summary, language_detected, "
+                "confidence (high/medium/low). No markdown."
+            )
+
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                }
+            ],
+            max_tokens=800,
+            temperature=0.2,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        return {
+            "engine": "openai-vision",
+            "caption": text,
+            "model": model,
+            "filename": path.name,
+            "ok": True,
+        }
+    except Exception as e:
+        logger.exception("OpenAI vision analysis failed: %s", e)
+        return _fallback_result("openai_error", language, error=str(e), filename=path.name)
+
+
 def analyze_document_image(
     image_path: str | Path,
     *,
@@ -66,13 +146,20 @@ def analyze_document_image(
     language: str = "en",
 ) -> dict[str, Any]:
     """
-    Run Florence-2 on an image and return structured analysis for the loan workflow.
+    Analyze an image: OpenAI Vision (if configured), else Florence-2, else deterministic fallback.
 
-    `language` affects only the fallback message text (UI/i18n), not the model weights.
+    `language` affects prompts and fallback text (UI/i18n).
     """
     path = Path(image_path)
     if not path.is_file():
         return _fallback_result("file_not_found", language)
+
+    backend = _resolve_document_backend()
+    if backend == "openai":
+        return _analyze_with_openai_vision(path, language)
+    if backend == "fallback":
+        logger.info("Document analysis backend is fallback (explicit).")
+        return _fallback_result("model_unavailable", language, filename=path.name)
 
     if not _florence_available():
         logger.info("Florence/transformers not available; using fallback analysis.")

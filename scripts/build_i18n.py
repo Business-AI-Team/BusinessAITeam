@@ -243,6 +243,30 @@ FR = {
     "Open admin": "Ouvrir l'admin",
     "Administration": "Administration",
     "LoanWise — users, applications, tokens": "LoanWise — utilisateurs, demandes, jetons",
+    # portal / backoffice / file upload component (2026)
+    "Backoffice": "Back-office",
+    "My applications": "Mes demandes",
+    "Bank backoffice": "Back-office banque",
+    "All loan applications": "Toutes les demandes de prêt",
+    "Read-only overview of every customer request. Open a row to view the full workspace.": (
+        "Vue d’ensemble en lecture seule de toutes les demandes clients. Ouvrez une ligne pour accéder au dossier complet."
+    ),
+    "Reference": "Référence",
+    "Applicant": "Demandeur",
+    "Type": "Type",
+    "Status": "Statut",
+    "Created": "Créé",
+    "Open": "Ouvrir",
+    "No applications yet.": "Aucune demande pour l’instant.",
+    "Backoffice view": "Vue back-office",
+    "All applications": "Toutes les demandes",
+    "You do not have access to the backoffice.": "Vous n’avez pas accès au back-office.",
+    "Add a file": "Ajouter un fichier",
+    "PDF or image — drag & drop or choose a file.": "PDF ou image — glissez-déposez ou choisissez un fichier.",
+    "Choose file": "Choisir un fichier",
+    "Document type": "Type de document",
+    "— optional —": "— facultatif —",
+    "Customer": "Client",
 }
 
 

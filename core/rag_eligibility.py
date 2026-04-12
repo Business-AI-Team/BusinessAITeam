@@ -15,6 +15,8 @@ from typing import Any
 
 from django.conf import settings
 
+from core.openai_config import get_openai_api_key
+
 logger = logging.getLogger(__name__)
 
 _CHUNK_SIZE = 900
@@ -224,22 +226,19 @@ def _llm_extract_rules(chunks: list[str], language: str) -> dict[str, Any] | Non
     user = f"Language hint: {language}\n\nExcerpts:\n{blob}"
     try:
         if provider == "openai":
+            api_key = get_openai_api_key()
+            if not api_key:
+                logger.warning(
+                    "LOANWISE_LLM_PROVIDER=openai but no API key (set OPENAI_API_KEY or Admin → Integration settings)."
+                )
+                return None
             from langchain_openai import ChatOpenAI
             from langchain_core.messages import HumanMessage, SystemMessage
 
             llm = ChatOpenAI(
                 model=getattr(settings, "LOANWISE_OPENAI_MODEL", "gpt-4o-mini"),
                 temperature=0,
-            )
-            msg = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
-            raw = getattr(msg, "content", str(msg))
-        elif provider == "ollama":
-            from langchain_community.chat_models import ChatOllama
-            from langchain_core.messages import HumanMessage, SystemMessage
-
-            llm = ChatOllama(
-                base_url=getattr(settings, "LOANWISE_OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
-                model=getattr(settings, "LOANWISE_OLLAMA_MODEL", "llama3"),
+                api_key=api_key,
             )
             msg = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
             raw = getattr(msg, "content", str(msg))

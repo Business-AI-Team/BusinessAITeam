@@ -14,6 +14,7 @@ from django.conf import settings
 
 from core.models import ChatMessage, ChatRole, LoanApplication, LoanApplicationStatus
 from core.document_requirement_service import label_for, requirements_for_application
+from core.openai_config import get_openai_api_key
 from core.rag_eligibility import build_rag_hint_for_chat
 
 logger = logging.getLogger(__name__)
@@ -47,16 +48,22 @@ def _llm_reply(
     system_extra: str,
     loan_type: str = "personal",
 ) -> str:
-    """Invoke configured LLM backend (OpenAI, Ollama, etc.) or template fallback."""
+    """Invoke configured LLM backend (OpenAI) or template fallback."""
     rag = build_rag_hint_for_chat(loan_type, language)
     system = _system_prompt(language) + " " + (rag + " " if rag else "") + system_extra
     provider = getattr(settings, "LOANWISE_LLM_PROVIDER", "none").lower()
     if provider == "openai":
         try:
+            api_key = get_openai_api_key()
+            if not api_key:
+                logger.warning(
+                    "LOANWISE_LLM_PROVIDER=openai but no API key (set OPENAI_API_KEY or Admin → Integration settings)."
+                )
+                raise ValueError("missing OpenAI API key")
             from langchain_openai import ChatOpenAI  # type: ignore
 
             model = getattr(settings, "LOANWISE_OPENAI_MODEL", "gpt-4o-mini")
-            llm = ChatOpenAI(model=model, temperature=0.3)
+            llm = ChatOpenAI(model=model, temperature=0.3, api_key=api_key)
             from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
 
             msg = llm.invoke(
@@ -68,19 +75,6 @@ def _llm_reply(
             return getattr(msg, "content", str(msg))
         except Exception as e:
             logger.warning("OpenAI LLM failed: %s", e)
-    if provider == "ollama":
-        try:
-            from langchain_community.chat_models import ChatOllama  # type: ignore
-
-            base = getattr(settings, "LOANWISE_OLLAMA_BASE_URL", "http://localhost:11434")
-            model = getattr(settings, "LOANWISE_OLLAMA_MODEL", "llama3")
-            llm = ChatOllama(base_url=base, model=model)
-            from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
-
-            msg = llm.invoke([SystemMessage(content=system), HumanMessage(content=user_text)])
-            return getattr(msg, "content", str(msg))
-        except Exception as e:
-            logger.warning("Ollama LLM failed: %s", e)
     # Template fallback (always works)
     if language.startswith("fr"):
         return f"(Mode démo sans LLM) Merci pour votre message. {system_extra[:200]}…"

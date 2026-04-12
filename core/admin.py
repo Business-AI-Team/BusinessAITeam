@@ -7,6 +7,7 @@ messages et jetons (FK `CASCADE`).
 
 from __future__ import annotations
 
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
@@ -16,11 +17,15 @@ from django.utils import timezone
 
 from core.models import (
     ApplicationDocument,
+    BackOffice,
     ChatMessage,
+    Customer,
     DocumentRequirement,
     EmailVerificationToken,
     EligibilityKnowledgeSource,
+    IntegrationSettings,
     LoanApplication,
+    Notification,
     User,
 )
 from core.rag_eligibility import (
@@ -47,6 +52,7 @@ class UserAdmin(BaseUserAdmin):
         "username",
         "first_name",
         "last_name",
+        "portal_role",
         "email_verified",
         "preferred_language",
         "is_active",
@@ -56,6 +62,7 @@ class UserAdmin(BaseUserAdmin):
         "last_login",
     )
     list_filter = (
+        "portal_role",
         "is_staff",
         "is_superuser",
         "is_active",
@@ -67,7 +74,7 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {"fields": ("email", "username", "password")}),
         (_("Personal info"), {"fields": ("first_name", "last_name")}),
-        (_("Preferences"), {"fields": ("preferred_language", "theme_preference", "email_verified")}),
+        (_("Preferences"), {"fields": ("preferred_language", "theme_preference", "email_verified", "portal_role")}),
         (_("Permissions"), {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
@@ -76,7 +83,7 @@ class UserAdmin(BaseUserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("email", "username", "password1", "password2"),
+                "fields": ("email", "username", "password1", "password2", "portal_role"),
             },
         ),
     )
@@ -103,13 +110,34 @@ class TokenAdmin(admin.ModelAdmin):
     ordering = ("-created",)
 
 
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ("email", "first_name", "last_name", "id_card", "user", "created_at")
+    search_fields = ("email", "first_name", "last_name", "id_card", "phone")
+    raw_id_fields = ("user",)
+
+
+@admin.register(BackOffice)
+class BackOfficeAdmin(admin.ModelAdmin):
+    list_display = ("email", "first_name", "last_name", "cin_number", "user", "created_at")
+    search_fields = ("email", "first_name", "last_name", "cin_number")
+    raw_id_fields = ("user",)
+
+
 @admin.register(LoanApplication)
 class LoanApplicationAdmin(admin.ModelAdmin):
-    list_display = ("reference", "user", "loan_type", "status", "eligibility_score", "created_at")
+    list_display = ("reference", "user", "customer", "loan_type", "status", "eligibility_score", "created_at")
     list_filter = ("status", "loan_type")
-    search_fields = ("reference", "user__email")
-    raw_id_fields = ("user",)
+    search_fields = ("reference", "user__email", "customer__email")
+    raw_id_fields = ("user", "customer")
     date_hierarchy = "created_at"
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("loan_application", "read", "created_at")
+    list_filter = ("read",)
+    raw_id_fields = ("loan_application",)
 
 
 @admin.register(ApplicationDocument)
@@ -120,7 +148,7 @@ class ApplicationDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(DocumentRequirement)
 class DocumentRequirementAdmin(admin.ModelAdmin):
-    list_display = ("code", "label_en", "is_required", "sort_order", "active")
+    list_display = ("code", "label_en", "is_required", "min_files", "sort_order", "active")
     list_filter = ("active", "is_required")
     search_fields = ("code", "label_en", "label_fr")
 
@@ -172,3 +200,54 @@ class EligibilityKnowledgeSourceAdmin(admin.ModelAdmin):
     def delete_model(self, request, obj):
         delete_eligibility_source_index(obj.pk)
         super().delete_model(request, obj)
+
+
+class IntegrationSettingsForm(forms.ModelForm):
+    class Meta:
+        model = IntegrationSettings
+        fields = ("openai_api_key",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["openai_api_key"].widget = forms.PasswordInput(
+            render_value=False,
+            attrs={"autocomplete": "off", "size": "72"},
+        )
+        self.fields["openai_api_key"].required = False
+        self.fields["openai_api_key"].label = _("OpenAI API key")
+        self.fields["openai_api_key"].help_text = _(
+            "Used for chat, RAG, and document vision. Leave blank when saving to keep the current key. "
+            "Environment variable OPENAI_API_KEY overrides this value when set."
+        )
+
+    def clean_openai_api_key(self):
+        val = (self.cleaned_data.get("openai_api_key") or "").strip()
+        if not val and self.instance.pk and getattr(self.instance, "openai_api_key", None):
+            return self.instance.openai_api_key
+        return val
+
+
+@admin.register(IntegrationSettings)
+class IntegrationSettingsAdmin(admin.ModelAdmin):
+    """Singleton: one row for API keys (superuser only)."""
+
+    form = IntegrationSettingsForm
+    list_display = ("__str__", "updated_at")
+    readonly_fields = ("updated_at",)
+
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_add_permission(self, request):
+        if not request.user.is_superuser:
+            return False
+        return not IntegrationSettings.objects.exists()
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return False

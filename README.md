@@ -16,7 +16,7 @@ LoanWise is a **Django + DRF** hackathon project: **API-first** REST backend, **
 | **Auth** | Registration, **email verification** (token link), **hashed passwords** (Django default). |
 | **Documents** | **SHA-256** fingerprinting; optional **delete after analysis** (`LOANWISE_DELETE_FILES_AFTER_ANALYSIS`). |
 | **Requirements** | Dynamic, DB-driven **document requirements** per loan type (extensible). |
-| **AI** | Configurable **LangGraph** bridge + step machine; **DeepFace** (optional); **Florence-2** (optional); **LLM** via OpenAI / Ollama / offline templates. |
+| **AI** | Configurable **LangGraph** bridge + step machine; **DeepFace** (optional); **Florence-2** (optional); **LLM** via **OpenAI** or offline templates. |
 | **Business** | **ROI / impact** JSON on each application; **PDF** report (ReportLab). |
 | **UX** | Dashboard, per-application workspace, **progress** indicators, structured API errors. |
 
@@ -64,7 +64,7 @@ Heavy packages (LangChain, PyTorch, Transformers, DeepFace) are listed in `requi
 pip install -r requirements-ai.txt
 ```
 
-Then configure `.env` (`LOANWISE_LLM_PROVIDER`, `OPENAI_API_KEY`, or Ollama URL). Without them, the app runs in **demo mode** (template replies and Florence/DeepFace fallbacks).
+Then configure `.env` (`LOANWISE_LLM_PROVIDER=openai`, `OPENAI_API_KEY`). Without them, the app runs in **demo mode** (template replies and Florence/DeepFace fallbacks).
 
 ---
 

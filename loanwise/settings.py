@@ -106,7 +106,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Liveness video uploads (webm) — override via env if needed
+# Large uploads (PDFs, images) — override via env if needed
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("DATA_UPLOAD_MAX_MEMORY_SIZE", str(15 * 1024 * 1024)))
 FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("FILE_UPLOAD_MAX_MEMORY_SIZE", str(15 * 1024 * 1024)))
 
@@ -180,11 +180,16 @@ LOANWISE_DELETE_FILES_AFTER_ANALYSIS = os.environ.get("LOANWISE_DELETE_FILES_AFT
 # Florence-2 (heavy GPU/CPU load); keep off unless explicitly enabled (see requirements-ai.txt).
 LOANWISE_ENABLE_FLORENCE = _env_bool("LOANWISE_ENABLE_FLORENCE", default=False)
 
-# LLM: openai | ollama | none
+# OpenAI: use OPENAI_API_KEY in the environment and/or Integration settings in Django Admin
+# (see core.openai_config.get_openai_api_key).
+
+# LLM: openai | none
 LOANWISE_LLM_PROVIDER = os.environ.get("LOANWISE_LLM_PROVIDER", "none")
 LOANWISE_OPENAI_MODEL = os.environ.get("LOANWISE_OPENAI_MODEL", "gpt-4o-mini")
-LOANWISE_OLLAMA_BASE_URL = os.environ.get("LOANWISE_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-LOANWISE_OLLAMA_MODEL = os.environ.get("LOANWISE_OLLAMA_MODEL", "llama3")
+# Vision model for identity / document images (gpt-4o-mini supports images).
+LOANWISE_OPENAI_VISION_MODEL = os.environ.get("LOANWISE_OPENAI_VISION_MODEL", "gpt-4o-mini")
+# Document analysis: openai | florence | fallback | auto (OpenAI if get_openai_api_key(), else …)
+LOANWISE_DOCUMENT_ANALYSIS_BACKEND = (os.environ.get("LOANWISE_DOCUMENT_ANALYSIS_BACKEND") or "auto").strip().lower()
 LOANWISE_USE_LANGGRAPH = os.environ.get("LOANWISE_USE_LANGGRAPH", "false").lower() in ("1", "true", "yes")
 
 LOGIN_URL = "/login/"

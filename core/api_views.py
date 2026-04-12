@@ -5,8 +5,6 @@ REST API views (API-first). Web UI consumes the same endpoints where relevant.
 from __future__ import annotations
 
 import logging
-import uuid
-from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -25,6 +23,7 @@ from core.document_requirement_service import label_for, seed_default_requiremen
 from core.email_verification_service import send_registration_verification_email, verify_email_with_code, verify_email_with_token
 from core.loan_chatbot_agent import run_chat_turn
 from core.loan_orchestrator_agent import run_orchestration
+from core.portal import can_access_all_applications
 from core.models import (
     ApplicationDocument,
     ChatMessage,
@@ -134,7 +133,12 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options", "patch"]
 
     def get_queryset(self):
-        return LoanApplication.objects.filter(user=self.request.user)
+        qs = (
+            LoanApplication.objects.all()
+            if can_access_all_applications(self.request.user)
+            else LoanApplication.objects.filter(user=self.request.user)
+        )
+        return qs.select_related("user", "customer").order_by("-created_at")
 
     def get_serializer_class(self):
         if self.action in ("create", "partial_update"):
@@ -230,7 +234,10 @@ class DocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, application_id: int):
-        app = get_object_or_404(LoanApplication, pk=application_id, user=request.user)
+        if can_access_all_applications(request.user):
+            app = get_object_or_404(LoanApplication, pk=application_id)
+        else:
+            app = get_object_or_404(LoanApplication, pk=application_id, user=request.user)
         requirement_id = request.POST.get("requirement_id")
         kind = request.POST.get("kind") or "generic"
         file = request.FILES.get("file")
@@ -239,15 +246,7 @@ class DocumentUploadView(APIView):
         req = None
         if requirement_id:
             req = DocumentRequirement.objects.filter(pk=requirement_id).first()
-        if (kind == "liveness_video" or kind == "face_selfie") and req is None:
-            req = DocumentRequirement.objects.filter(code="face_selfie", active=True).first()
-        if kind == "liveness_video":
-            ext = Path(file.name).suffix.lower()
-            if ext not in (".webm", ".mp4", ".mov", ".mkv", ".avi"):
-                ext = ".webm"
-            stored_name = f"liveness_{uuid.uuid4().hex}{ext}"
-        else:
-            stored_name = file.name
+        stored_name = file.name
         rel_path = f"loanwise/{app.id}/{stored_name}"
         from django.core.files.storage import default_storage
 
@@ -256,10 +255,6 @@ class DocumentUploadView(APIView):
         digest = sha256_file(full)
         valid_kinds = {c[0] for c in DocumentKind.choices}
         analysis_result: dict = {}
-        if kind == "liveness_video":
-            # Set by the web UI only after the guided MediaPipe sequence completes (recording stops then).
-            raw_client = (request.POST.get("client_liveness_completed") or "").strip().lower()
-            analysis_result["client_sequence_completed"] = raw_client in ("1", "true", "yes", "on")
         ad = ApplicationDocument.objects.create(
             application=app,
             requirement=req,
@@ -271,13 +266,6 @@ class DocumentUploadView(APIView):
             storage_path=path,
             analysis_result=analysis_result,
         )
-        # Liveness must win over requirement=face_selfie (otherwise webm is mis-tagged as FACE_SELFIE).
-        if kind == "liveness_video":
-            ad.kind = DocumentKind.LIVENESS_VIDEO
-            ad.save(update_fields=["kind"])
-        elif kind == "face_selfie" or (req and req.code == "face_selfie"):
-            ad.kind = DocumentKind.FACE_SELFIE
-            ad.save(update_fields=["kind"])
         return Response(ApplicationDocumentSerializer(ad).data, status=201)
 
 

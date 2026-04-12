@@ -4,8 +4,13 @@
 {% block title %}{{ application.reference }} — {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="space-y-10" x-data="appWorkspace({{ application.id }}, { initialProgress: {{ lw_initial_progress }}, requireEmail: {{ lw_require_email|yesno:'true,false' }}, emailVerified: {{ lw_email_verified|yesno:'true,false' }} })" x-init="csrf = getCookie('csrftoken'); init()">
-  {{ lw_liveness_msg_dict|json_script:"lw-liveness-msg-data" }}
+<div class="space-y-10" x-data="appWorkspace({{ application.id }}, { initialProgress: {{ lw_initial_progress }}, requireEmail: {{ lw_require_email|yesno:'true,false' }}, emailVerified: {{ lw_email_verified|yesno:'true,false' }} })" x-init="csrf = getCookie('csrftoken'); init()" @loanwise-file-uploaded.window="progressPct = Math.min(88, progressPct + 12)">
+  {% if lw_portal_backoffice %}
+  <div class="animate-fade-in-up rounded-2xl border border-violet-400/50 bg-violet-950/25 p-4 text-sm text-violet-100 dark:border-violet-600/50">
+    <p class="font-semibold">{% trans "Backoffice view" %}</p>
+    <p class="mt-1 text-xs text-violet-200/90">{% trans "Applicant" %}: {{ lw_applicant_email }} · <a href="{% url 'backoffice_dashboard' %}" class="underline hover:text-white">{% trans "All applications" %}</a></p>
+  </div>
+  {% endif %}
   {% if lw_require_email and not lw_email_verified %}
   <div class="animate-fade-in-up rounded-2xl border border-amber-300/80 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
     {% trans "Email verification is required to run the AI pipeline. If you did not receive an email, check the terminal where runserver is running (console email backend), or ask an administrator to mark your account as verified." %}
@@ -88,7 +93,7 @@
   <div class="animate-fade-in-up rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
     <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Analysis results" %}</h2>
     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-      {% trans "Liveness: validates the guided session before upload. The percentage applies only to similarity between your ID photo and your face (recording or selfie), not to movements." %}
+      {% trans "Eligibility score is computed from your declared income, amount, and term after document analysis." %}
     </p>
     <ul class="mt-4 space-y-4">
       {% for row in lw_analysis_rows %}
@@ -145,66 +150,11 @@
     <!-- Upload + ROI -->
     <div class="space-y-6">
       <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents" %}</h2>
-        <p class="mt-1 text-xs text-slate-500">{% trans "Files are hashed (SHA-256) and removed after analysis." %}</p>
-        <form class="mt-4 space-y-3" @submit.prevent="uploadDoc()">
-          <input type="file" x-ref="fileInput" class="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-sky-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white">
-          <div class="flex gap-2 text-xs">
-            <select x-model="reqId" class="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 dark:border-slate-700 dark:bg-slate-950">
-              <option value="">{% trans "Requirement" %}</option>
-              <template x-for="r in requirements" :key="r.id">
-                <option :value="r.id" x-text="r.label"></option>
-              </template>
-            </select>
-            <select x-model="docKind" class="w-44 rounded-lg border border-slate-200 bg-white px-2 py-2 dark:border-slate-700 dark:bg-slate-950">
-              <option value="generic">{% trans "generic" %}</option>
-              <option value="face_selfie">{% trans "face_selfie" %}</option>
-              <option value="identity">{% trans "identity" %}</option>
-              <option value="liveness_video">{% trans "liveness_video" %}</option>
-            </select>
-          </div>
-          <button type="submit" class="w-full rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-800 hover:border-sky-400 dark:border-slate-700 dark:text-slate-100" :disabled="uploading">
-            <span x-show="!uploading">{% trans "Upload" %}</span>
-            <span x-show="uploading" x-cloak>{% trans "Uploading…" %}</span>
-          </button>
-        </form>
-      </div>
-
-      <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Liveness video" %}</h2>
-        <p class="mt-1 text-xs text-slate-500">
-          {% trans "Click Start: the AI guides you in real time. When the sequence is validated, recording stops automatically and the video is sent. Compare it with your ID by running the AI pipeline." %}
-        </p>
-        <div class="relative mt-3 overflow-hidden rounded-xl ring-1 ring-slate-200 dark:ring-slate-700">
-          <video x-ref="livenessPreview"
-                 playsinline
-                 webkit-playsinline
-                 muted
-                 autoplay
-                 class="aspect-video min-h-[192px] w-full -scale-x-100 transform bg-slate-900 object-cover"
-          ></video>
-          <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-3 pb-3 pt-10">
-            <p class="text-center text-sm font-semibold leading-snug text-white drop-shadow-md" x-text="livenessMessage"></p>
-            <p class="mt-2 text-center text-xs font-medium text-emerald-300" x-show="livenessVideoSaved" x-cloak>
-              {% trans "Video received. Run the AI pipeline to compare with your ID." %}
-            </p>
-          </div>
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Required documents" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "CNI or passport, proof of address, and three payslips where applicable. Files are hashed (SHA-256) and removed after analysis." %}</p>
+        <div class="mt-4">
+          {% include "loanwise/components/file_upload_matrix.html" with lw_upload_app_id=application.id %}
         </div>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button type="button" @click="livenessStart()"
-                  class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-                  :disabled="livenessRecording || livenessUploading">
-            <span x-show="!livenessRecording && !livenessUploading">{% trans "Start liveness check" %}</span>
-            <span x-show="livenessRecording" x-cloak>{% trans "In progress…" %}</span>
-            <span x-show="livenessUploading && !livenessRecording" x-cloak>{% trans "Sending video…" %}</span>
-          </button>
-          <button type="button" @click="livenessCancel()"
-                  class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-800 hover:border-red-400 dark:border-slate-600 dark:text-slate-100"
-                  :disabled="!livenessRecording || livenessUploading">
-            {% trans "Cancel" %}
-          </button>
-        </div>
-        <p class="mt-2 text-xs text-slate-500" x-show="livenessUploading" x-cloak>{% trans "Sending video…" %}</p>
       </div>
 
       <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-xl dark:border-slate-700">
@@ -221,7 +171,7 @@
   {% if lw_ai_debug_json %}
   <div class="animate-fade-in-up rounded-2xl border border-amber-400/60 bg-amber-50/90 p-4 dark:border-amber-700 dark:bg-amber-950/40">
     <h2 class="text-sm font-semibold text-amber-950 dark:text-amber-100">{% trans "AI analysis output (development only)" %}</h2>
-    <p class="mt-1 text-xs text-amber-900/80 dark:text-amber-200/90">{% trans "Full JSON from face/liveness checks and document analysis — visible when DEBUG is true." %}</p>
+    <p class="mt-1 text-xs text-amber-900/80 dark:text-amber-200/90">{% trans "Orchestration log and document analysis payloads — visible when DEBUG is true." %}</p>
     <pre class="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-4 font-mono text-[11px] leading-relaxed text-emerald-200">{{ lw_ai_debug_json }}</pre>
   </div>
   {% endif %}
@@ -229,13 +179,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/loanwise_liveness_realtime.js' %}"></script>
+<script src="{% static 'js/loanwise_file_upload.js' %}"></script>
 <script>
-  function lwReadLivenessMsgs() {
-    var el = document.getElementById('lw-liveness-msg-data');
-    if (!el) return {};
-    try { return JSON.parse(el.textContent); } catch (e) { return {}; }
-  }
   function appWorkspace(appId, opts) {
     opts = opts || {};
     var ip = typeof opts.initialProgress === 'number' ? opts.initialProgress : 15;
@@ -246,22 +191,7 @@
       csrf: '',
       input: '',
       messages: [],
-      requirements: [],
-      reqId: '',
-      docKind: 'generic',
       busy: false,
-      uploading: false,
-      livenessRecording: false,
-      livenessUploading: false,
-      livenessChunks: [],
-      mediaRecorder: null,
-      livenessStream: null,
-      livenessMessage: '',
-      livenessGuideComplete: false,
-      livenessVideoSaved: false,
-      _livenessFinalizing: false,
-      livenessRt: null,
-      livenessMessages: lwReadLivenessMsgs(),
       progressPct: ip,
       statusLabel: '{{ application.get_status_display|escapejs }}',
       progressHint: '{% filter escapejs %}{% trans "Complete the chat steps, upload documents, then run the AI pipeline." %}{% endfilter %}',
@@ -282,16 +212,10 @@
       },
       async init() {
         await this.loadMessages();
-        await this.loadRequirements();
       },
       async loadMessages() {
         const res = await fetch('/api/applications/' + this.appId + '/messages/', { credentials: 'same-origin' });
         if (res.ok) this.messages = await res.json();
-      },
-      async loadRequirements() {
-        const lang = document.documentElement.lang || 'fr';
-        const res = await fetch('/api/requirements/?lang=' + encodeURIComponent(lang), { credentials: 'same-origin' });
-        if (res.ok) this.requirements = await res.json();
       },
       async sendChat() {
         if (!this.input.trim()) return;
@@ -308,183 +232,6 @@
           if (data.reply) {
             this.progressPct = Math.min(88, this.progressPct + 10);
           }
-        }
-      },
-      async livenessStart() {
-        if (!navigator.mediaDevices || !window.MediaRecorder) {
-          alert('{% filter escapejs %}{% trans "Camera recording is not supported in this browser." %}{% endfilter %}');
-          return;
-        }
-        if (!window.LoanWiseLivenessRT) {
-          alert('{% filter escapejs %}{% trans "Real-time analysis unavailable (MediaPipe did not load). Allow scripts from the CDN or try another browser." %}{% endfilter %}');
-          return;
-        }
-        try {
-          this.livenessVideoSaved = false;
-          if (this.livenessStream) {
-            this.livenessStream.getTracks().forEach(function (t) { t.stop(); });
-            this.livenessStream = null;
-          }
-          this.livenessChunks = [];
-          const constraints = {
-            video: {
-              facingMode: 'user',
-              width: { ideal: 1280, min: 320 },
-              height: { ideal: 720, min: 240 },
-            },
-            audio: false,
-          };
-          try {
-            this.livenessStream = await navigator.mediaDevices.getUserMedia(constraints);
-          } catch (cErr) {
-            this.livenessStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          }
-          const v = this.$refs.livenessPreview;
-          if (!v) return;
-          v.srcObject = this.livenessStream;
-          v.muted = true;
-          v.setAttribute('playsinline', '');
-          v.setAttribute('webkit-playsinline', '');
-          v.playsInline = true;
-          if (typeof this.$nextTick === 'function') {
-            await this.$nextTick();
-          } else {
-            await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
-          }
-          try {
-            await v.play();
-          } catch (playErr) {
-            console.warn('liveness preview play()', playErr);
-          }
-          this.livenessMessage = this.livenessMessages.show_face || '';
-          this.livenessGuideComplete = false;
-          if (this.livenessRt) {
-            try { this.livenessRt.stop(); } catch (e) {}
-            this.livenessRt = null;
-          }
-          var self = this;
-          this.livenessRt = window.LoanWiseLivenessRT.create(v, {
-            messages: this.livenessMessages,
-            onHint: function (text) { self.livenessMessage = text; },
-            onSequenceComplete: function () { self.livenessFinalizeUpload(); },
-          });
-          try {
-            await Promise.resolve(this.livenessRt.start());
-          } catch (e1) {
-            this.livenessMessage = this.livenessMessages.no_lib || '';
-            if (this.livenessStream) {
-              this.livenessStream.getTracks().forEach(function (t) { t.stop(); });
-              this.livenessStream = null;
-            }
-            v.srcObject = null;
-            this.livenessRt = null;
-            alert(this.livenessMessages.no_lib || '');
-            return;
-          }
-          const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-            ? 'video/webm;codecs=vp9'
-            : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '');
-          const mr = new MediaRecorder(this.livenessStream, mime ? { mimeType: mime } : {});
-          mr.ondataavailable = (e) => { if (e.data && e.data.size) this.livenessChunks.push(e.data); };
-          mr.start(250);
-          this.mediaRecorder = mr;
-          this.livenessRecording = true;
-        } catch (e) {
-          alert('{% filter escapejs %}{% trans "Could not access the camera." %}{% endfilter %}');
-        }
-      },
-      async livenessFinalizeUpload() {
-        if (this._livenessFinalizing) return;
-        this._livenessFinalizing = true;
-        this.livenessGuideComplete = true;
-        try {
-          if (this.livenessRt) {
-            try { this.livenessRt.stop(); } catch (e) {}
-            this.livenessRt = null;
-          }
-          if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-            this.mediaRecorder.stop();
-            await new Promise((r) => setTimeout(r, 650));
-          }
-          if (this.livenessStream) {
-            this.livenessStream.getTracks().forEach((t) => t.stop());
-            if (this.$refs.livenessPreview) this.$refs.livenessPreview.srcObject = null;
-            this.livenessStream = null;
-          }
-          this.livenessRecording = false;
-          this.mediaRecorder = null;
-          this.livenessMessage = this.livenessMessages.uploading_auto || '';
-          if (!this.livenessChunks.length) {
-            alert('{% filter escapejs %}{% trans "No video data to upload." %}{% endfilter %}');
-            return;
-          }
-          this.livenessUploading = true;
-          const blob = new Blob(this.livenessChunks, { type: 'video/webm' });
-          const fd = new FormData();
-          fd.append('file', blob, 'liveness.webm');
-          fd.append('kind', 'liveness_video');
-          fd.append('client_liveness_completed', 'true');
-          const res = await fetch('/api/documents/upload/' + this.appId + '/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'X-CSRFToken': this.getCookie('csrftoken') },
-            body: fd,
-          });
-          if (res.ok) {
-            this.progressPct = Math.min(88, this.progressPct + 12);
-            this.livenessChunks = [];
-            this.livenessVideoSaved = true;
-            this.livenessMessage = this.livenessMessages.video_saved_ok || '';
-          } else {
-            alert('{% filter escapejs %}{% trans "Video upload failed." %}{% endfilter %}');
-          }
-        } finally {
-          this.livenessUploading = false;
-          this._livenessFinalizing = false;
-        }
-      },
-      async livenessCancel() {
-        if (this._livenessFinalizing) return;
-        if (this.livenessRt) {
-          try { this.livenessRt.stop(); } catch (e) {}
-          this.livenessRt = null;
-        }
-        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-          this.mediaRecorder.stop();
-          await new Promise((r) => setTimeout(r, 200));
-        }
-        this.livenessChunks = [];
-        if (this.livenessStream) {
-          this.livenessStream.getTracks().forEach((t) => t.stop());
-          if (this.$refs.livenessPreview) this.$refs.livenessPreview.srcObject = null;
-          this.livenessStream = null;
-        }
-        this.livenessRecording = false;
-        this.mediaRecorder = null;
-        this.livenessMessage = this.livenessMessages.cancelled || '';
-        this.livenessGuideComplete = false;
-      },
-      async uploadDoc() {
-        const f = this.$refs.fileInput.files[0];
-        if (!f) return;
-        this.uploading = true;
-        const fd = new FormData();
-        fd.append('file', f);
-        fd.append('kind', this.docKind);
-        if (this.reqId) fd.append('requirement_id', this.reqId);
-        try {
-          const res = await fetch('/api/documents/upload/' + this.appId + '/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'X-CSRFToken': this.getCookie('csrftoken') },
-            body: fd,
-          });
-          if (res.ok) {
-            this.progressPct = Math.min(88, this.progressPct + 12);
-            this.$refs.fileInput.value = '';
-          }
-        } finally {
-          this.uploading = false;
         }
       },
       async runOrchestrator() {

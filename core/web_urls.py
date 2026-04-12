@@ -11,5 +11,6 @@ urlpatterns = [
     path("login/", web_views.login_page, name="login_page"),
     path("logout/", web_views.logout_view, name="logout"),
     path("dashboard/", web_views.dashboard, name="dashboard"),
+    path("backoffice/", web_views.backoffice_dashboard, name="backoffice_dashboard"),
     path("applications/<int:pk>/", web_views.application_detail, name="application_detail"),
 ]

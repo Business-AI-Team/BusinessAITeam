@@ -66,7 +66,12 @@
       <nav class="hidden items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300 md:flex">
         <a href="{% url 'home' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "Home" %}</a>
         {% if user.is_authenticated %}
-        <a href="{% url 'dashboard' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "Dashboard" %}</a>
+          {% if user.portal_role == 'backoffice' or user.is_superuser %}
+          <a href="{% url 'backoffice_dashboard' %}" class="font-semibold text-violet-700 hover:text-violet-600 dark:text-violet-400 dark:hover:text-violet-300">{% trans "Backoffice" %}</a>
+          {% endif %}
+          {% if user.portal_role != 'backoffice' or user.is_superuser %}
+          <a href="{% url 'dashboard' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "My applications" %}</a>
+          {% endif %}
         {% endif %}
         {% if user.is_authenticated and user.is_staff %}
         <a href="{% url 'admin:index' %}" class="font-semibold text-amber-700 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300" target="_blank" rel="noopener noreferrer">{% trans "Admin" %}</a>
@@ -111,6 +116,23 @@
         {% endif %}
       </div>
     </div>
+    {% if user.is_authenticated %}
+    <div class="border-t border-slate-200/80 bg-slate-50/90 dark:border-slate-800/80 dark:bg-slate-900/50 md:hidden">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+        <a href="{% url 'home' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "Home" %}</a>
+        {% if user.portal_role == 'backoffice' or user.is_superuser %}
+        <a href="{% url 'backoffice_dashboard' %}" class="font-semibold text-violet-700 dark:text-violet-400">{% trans "Backoffice" %}</a>
+        {% endif %}
+        {% if user.portal_role != 'backoffice' or user.is_superuser %}
+        <a href="{% url 'dashboard' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "My applications" %}</a>
+        {% endif %}
+        {% if user.is_staff %}
+        <a href="{% url 'admin:index' %}" class="text-amber-800 dark:text-amber-400" target="_blank" rel="noopener noreferrer">{% trans "Admin" %}</a>
+        {% endif %}
+        <a href="/api/docs/swagger/" class="hover:text-sky-600 dark:hover:text-sky-400" target="_blank" rel="noopener">API</a>
+      </div>
+    </div>
+    {% endif %}
   </header>
 
   <main class="mx-auto max-w-6xl px-4 py-10">

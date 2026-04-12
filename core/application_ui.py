@@ -16,7 +16,7 @@ def application_pipeline_progress_percent(application: LoanApplication) -> int:
     if application.eligibility_score is not None:
         return 100
     st = application.status
-    if st in (LoanApplicationStatus.APPROVED, LoanApplicationStatus.REJECTED):
+    if st in (LoanApplicationStatus.VALIDATED, LoanApplicationStatus.REJECTED):
         return 100
 
     n_msg = application.chat_messages.count()

@@ -35,19 +35,32 @@ def description_for(req: DocumentRequirement, language: str) -> str:
     return req.description_en
 
 
+def document_counts_by_requirement_code(application: LoanApplication) -> dict[str, int]:
+    """Non-deleted uploads grouped by requirement code (for min_files)."""
+    counts: dict[str, int] = {}
+    for doc in application.documents.filter(deleted_at__isnull=True).select_related("requirement"):
+        if doc.requirement_id and doc.requirement:
+            code = doc.requirement.code
+            counts[code] = counts.get(code, 0) + 1
+    return counts
+
+
 def missing_required_codes(
     application: LoanApplication,
-    uploaded_codes: set[str],
+    counts_by_code: dict[str, int] | None = None,
 ) -> list[str]:
     """
-    Return requirement codes that are still missing (required only).
-    `uploaded_codes` should be the set of DocumentRequirement.code for attached docs.
+    Requirement codes still below ``min_files`` (or absent).
     """
+    if counts_by_code is None:
+        counts_by_code = document_counts_by_requirement_code(application)
     needed: list[str] = []
     for req in requirements_for_application(application):
         if not req.is_required:
             continue
-        if req.code not in uploaded_codes:
+        have = counts_by_code.get(req.code, 0)
+        min_f = max(1, getattr(req, "min_files", 1) or 1)
+        if have < min_f:
             needed.append(req.code)
     return needed
 
@@ -59,32 +72,35 @@ def seed_default_requirements() -> int:
     defaults = [
         {
             "code": "identity_card",
-            "label_fr": "Pièce d'identité",
-            "label_en": "Government ID",
-            "description_fr": "CNI ou passeport valide.",
-            "description_en": "Valid national ID or passport.",
+            "label_fr": "CNI / Passeport",
+            "label_en": "ID card / Passport",
+            "description_fr": "Carte nationale d'identité ou passeport valide.",
+            "description_en": "Valid national ID card or passport.",
             "applies_to_loan_types": [LoanType.PERSONAL, LoanType.MORTGAGE, LoanType.BUSINESS],
             "is_required": True,
+            "min_files": 1,
             "sort_order": 10,
         },
         {
-            "code": "income_proof",
-            "label_fr": "Justificatif de revenus",
-            "label_en": "Income proof",
-            "description_fr": "Bulletins de salaire ou avis d'imposition récents.",
-            "description_en": "Recent payslips or tax assessment.",
+            "code": "proof_of_address",
+            "label_fr": "Justificatif de domicile",
+            "label_en": "Proof of address",
+            "description_fr": "Facture récente (électricité, eau, téléphone) ou avis d'imposition.",
+            "description_en": "Recent utility bill or official proof of residence.",
             "applies_to_loan_types": [LoanType.PERSONAL, LoanType.MORTGAGE, LoanType.BUSINESS],
             "is_required": True,
+            "min_files": 1,
             "sort_order": 20,
         },
         {
-            "code": "face_selfie",
-            "label_fr": "Selfie pour vérification",
-            "label_en": "Selfie for verification",
-            "description_fr": "Photo du visage pour correspondance avec la pièce d'identité.",
-            "description_en": "Face photo for matching with ID document.",
-            "applies_to_loan_types": [LoanType.PERSONAL, LoanType.BUSINESS],
+            "code": "income_proof",
+            "label_fr": "Trois bulletins de salaire",
+            "label_en": "Three payslips",
+            "description_fr": "Les trois derniers bulletins de salaire (ou équivalent).",
+            "description_en": "Your last three payslips (or equivalent).",
+            "applies_to_loan_types": [LoanType.PERSONAL, LoanType.MORTGAGE, LoanType.BUSINESS],
             "is_required": True,
+            "min_files": 3,
             "sort_order": 30,
         },
         {
@@ -95,15 +111,41 @@ def seed_default_requirements() -> int:
             "description_en": "For business loans.",
             "applies_to_loan_types": [LoanType.BUSINESS],
             "is_required": True,
+            "min_files": 1,
             "sort_order": 40,
         },
     ]
     created = 0
     for row in defaults:
-        _, was_created = DocumentRequirement.objects.get_or_create(
-            code=row["code"],
-            defaults=row,
+        code = row["code"]
+        min_files = row.get("min_files", 1)
+        data = {k: v for k, v in row.items() if k != "min_files"}
+        obj, was_created = DocumentRequirement.objects.get_or_create(
+            code=code,
+            defaults={**data, "min_files": min_files},
         )
         if was_created:
             created += 1
+        else:
+            updates: list[str] = []
+            for k, v in data.items():
+                if getattr(obj, k, None) != v:
+                    setattr(obj, k, v)
+                    updates.append(k)
+            if obj.min_files != min_files:
+                obj.min_files = min_files
+                updates.append("min_files")
+            if updates:
+                obj.save(update_fields=list(set(updates)))
     return created
+
+
+def default_doc_kind_for_requirement_code(code: str) -> str:
+    """Suggested DocumentKind for uploads (UI hint)."""
+    if code == "identity_card":
+        return "identity"
+    if code == "proof_of_address":
+        return "address"
+    if code == "income_proof":
+        return "income"
+    return "generic"

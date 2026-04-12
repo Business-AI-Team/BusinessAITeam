@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from core.models import ApplicationDocument, ChatMessage, DocumentRequirement, LoanApplication
+from core.models import ApplicationDocument, ChatMessage, DocumentRequirement, LoanApplication, PortalRole
 
 User = get_user_model()
 
@@ -27,8 +27,9 @@ class UserSerializer(serializers.ModelSerializer):
             "email_verified",
             "preferred_language",
             "theme_preference",
+            "portal_role",
         )
-        read_only_fields = ("id", "email_verified")
+        read_only_fields = ("id", "email_verified", "portal_role")
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -47,6 +48,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User(**validated_data)
         user.set_password(password)
         user.email_verified = False
+        user.portal_role = PortalRole.CUSTOMER
         user.save()
         return user
 
@@ -64,6 +66,7 @@ class DocumentRequirementSerializer(serializers.ModelSerializer):
             "description",
             "applies_to_loan_types",
             "is_required",
+            "min_files",
             "sort_order",
         )
 
@@ -77,6 +80,8 @@ class DocumentRequirementSerializer(serializers.ModelSerializer):
 
 
 class LoanApplicationSerializer(serializers.ModelSerializer):
+    applicant_email = serializers.SerializerMethodField()
+
     class Meta:
         model = LoanApplication
         fields = (
@@ -93,12 +98,13 @@ class LoanApplicationSerializer(serializers.ModelSerializer):
             "eligibility_score",
             "roi_summary",
             "business_impact",
-            "face_verification",
-            "liveness_verification",
             "orchestration_log",
             "created_at",
             "updated_at",
             "submitted_at",
+            "due_date",
+            "customer",
+            "applicant_email",
         )
         read_only_fields = (
             "id",
@@ -107,13 +113,28 @@ class LoanApplicationSerializer(serializers.ModelSerializer):
             "eligibility_score",
             "roi_summary",
             "business_impact",
-            "face_verification",
-            "liveness_verification",
             "orchestration_log",
             "created_at",
             "updated_at",
             "submitted_at",
+            "due_date",
+            "customer",
+            "applicant_email",
         )
+
+    def get_applicant_email(self, obj: LoanApplication) -> str | None:
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        if getattr(request.user, "portal_role", None) != PortalRole.BACKOFFICE and not getattr(
+            request.user, "is_superuser", False
+        ):
+            return None
+        if getattr(obj, "customer_id", None):
+            return obj.customer.email or getattr(obj.user, "email", None)
+        if obj.user_id:
+            return getattr(obj.user, "email", None)
+        return None
 
 
 class LoanApplicationWriteSerializer(serializers.ModelSerializer):
@@ -128,8 +149,9 @@ class LoanApplicationWriteSerializer(serializers.ModelSerializer):
             "term_months",
             "annual_income",
             "purpose",
+            "due_date",
         )
-        extra_kwargs = {"language": {"required": False}}
+        extra_kwargs = {"language": {"required": False}, "due_date": {"required": False}}
 
     def validate_amount_requested(self, value: Decimal) -> Decimal:
         if value < 0:

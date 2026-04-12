@@ -24,6 +24,9 @@ data/chroma_rag/
 .env.local
 *.pem
 
+# SSH private keys in project (use %USERPROFILE%\.ssh\ instead)
+12345678FredGit
+
 # IDE
 .idea/
 .vscode/

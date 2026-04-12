@@ -1,0 +1,49 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Backoffice" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-8">
+  <div class="rounded-2xl border border-violet-500/30 bg-gradient-to-br from-violet-950/40 to-slate-900/80 p-6 dark:border-violet-700/40">
+    <p class="text-xs font-semibold uppercase tracking-wider text-violet-300">{% trans "Bank backoffice" %}</p>
+    <h1 class="mt-2 text-3xl font-bold text-white">{% trans "All loan applications" %}</h1>
+    <p class="mt-1 text-sm text-violet-200/90">{% trans "Read-only overview of every customer request. Open a row to view the full workspace." %}</p>
+  </div>
+
+  {% if not applications %}
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
+    <p class="text-slate-600 dark:text-slate-300">{% trans "No applications yet." %}</p>
+  </div>
+  {% else %}
+  <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+    <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+      <thead class="bg-slate-50 dark:bg-slate-900/80">
+        <tr>
+          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Reference" %}</th>
+          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Applicant" %}</th>
+          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Type" %}</th>
+          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Status" %}</th>
+          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Created" %}</th>
+          <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+        {% for app in applications %}
+        <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
+          <td class="px-4 py-3 font-mono text-xs text-sky-700 dark:text-sky-400">{{ app.reference }}</td>
+          <td class="px-4 py-3 text-slate-800 dark:text-slate-100">{{ app.user.email }}</td>
+          <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ app.get_loan_type_display }}</td>
+          <td class="px-4 py-3">{{ app.get_status_display }}</td>
+          <td class="px-4 py-3 text-slate-500">{{ app.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td class="px-4 py-3 text-right">
+            <a href="{% url 'application_detail' app.pk %}" class="inline-flex rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500">{% trans "Open" %}</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
