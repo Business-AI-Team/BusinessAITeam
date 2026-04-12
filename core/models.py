@@ -33,10 +33,82 @@ class ThemePreference(models.TextChoices):
     DARK = "dark", _("Dark")
 
 
+class PortalRole(models.TextChoices):
+    """Account type (ERD: Account.Type): customer workspace vs bank backoffice. Maps to Customer vs BackOffice profile."""
+
+    CUSTOMER = "customer", _("Customer")
+    BACKOFFICE = "backoffice", _("Backoffice")
+
+
+class Customer(models.Model):
+    """
+    Applicant profile (ERD: Customer). Linked 1:1 to the login account (`User`) when Type = customer.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="customer_profile",
+        null=True,
+        blank=True,
+    )
+    id_card = models.CharField(
+        max_length=128,
+        blank=True,
+        help_text=_("National ID / CIN / ID card number."),
+    )
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    email = models.EmailField(
+        blank=True,
+        help_text=_("Profile copy; canonical login email is on Account (User)."),
+    )
+    phone = models.CharField(max_length=32, blank=True)
+    address = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Customer")
+        verbose_name_plural = _("Customers")
+
+    def __str__(self) -> str:
+        name = f"{self.first_name} {self.last_name}".strip()
+        return name or (self.email or str(self.pk))
+
+
+class BackOffice(models.Model):
+    """
+    Bank staff profile (ERD: Back-Office). Linked 1:1 to `User` when Type = backoffice.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="backoffice_profile",
+        null=True,
+        blank=True,
+    )
+    cin_number = models.CharField(max_length=64, blank=True)
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    email = models.EmailField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Back-Office")
+        verbose_name_plural = _("Back-Office")
+
+    def __str__(self) -> str:
+        name = f"{self.first_name} {self.last_name}".strip()
+        return name or (self.email or str(self.pk))
+
+
 class User(AbstractUser):
     """
-    Extended user with email-as-username style uniqueness, verification flag,
-    and preferences for i18n and theming (used by templates and API serializers).
+    Login account (ERD: Account: email, password, Type via `portal_role`).
+    Extended with verification, i18n, theming; 1:1 Customer or BackOffice profile when applicable.
     """
 
     email = models.EmailField(_("email address"), unique=True)
@@ -50,6 +122,13 @@ class User(AbstractUser):
         max_length=10,
         choices=ThemePreference.choices,
         default=ThemePreference.DARK,
+    )
+    portal_role = models.CharField(
+        max_length=20,
+        choices=PortalRole.choices,
+        default=PortalRole.CUSTOMER,
+        db_index=True,
+        help_text=_("Customer: own applications only. Backoffice: list and open all applications."),
     )
 
     USERNAME_FIELD = "email"
@@ -117,24 +196,32 @@ class LoanType(models.TextChoices):
 
 
 class LoanApplicationStatus(models.TextChoices):
-    DRAFT = "draft", _("Draft")
+    """ERD LoanRequest status (extended with in_review pipeline states)."""
+
+    PENDING = "pending", _("Pending")
     IN_PROGRESS = "in_progress", _("In progress")
     UNDER_REVIEW = "under_review", _("Under review")
-    APPROVED = "approved", _("Approved")
+    VALIDATED = "validated", _("Validated")
     REJECTED = "rejected", _("Rejected")
-    COMPLETED = "completed", _("Completed")
+    CANCELED = "canceled", _("Canceled")
+    CLOSED = "closed", _("Closed")
 
 
 class LoanApplication(models.Model):
     """
-    Main loan request: eligibility inputs, workflow step, aggregated AI outputs,
-    ROI / business impact (JSON for flexible dashboard and PDF export).
+    Loan request (ERD: LoanRequest): owned by a Customer profile; `user` duplicates Customer.user for auth queries.
     """
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="loan_applications",
+        help_text=_("Account (login user); same as customer.user when set."),
+    )
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="loan_requests",
     )
     reference = models.CharField(max_length=32, unique=True, db_index=True)
     loan_type = models.CharField(
@@ -145,7 +232,7 @@ class LoanApplication(models.Model):
     status = models.CharField(
         max_length=20,
         choices=LoanApplicationStatus.choices,
-        default=LoanApplicationStatus.DRAFT,
+        default=LoanApplicationStatus.PENDING,
     )
     language = models.CharField(
         max_length=5,
@@ -175,14 +262,13 @@ class LoanApplication(models.Model):
     )
     roi_summary = models.JSONField(default=dict, blank=True)
     business_impact = models.JSONField(default=dict, blank=True)
-    face_verification = models.JSONField(default=dict, blank=True)
-    liveness_verification = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text=_("Liveness video analysis: head turns, face match vs ID, debug payloads."),
-    )
     orchestration_log = models.JSONField(default=list, blank=True)
     final_report_html = models.TextField(blank=True)
+    due_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=_("Optional target decision or offer expiry date (ERD)."),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
@@ -191,6 +277,7 @@ class LoanApplication(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["customer", "-created_at"]),
             models.Index(fields=["reference"]),
         ]
 
@@ -198,6 +285,25 @@ class LoanApplication(models.Model):
         if not self.reference:
             # Short unique reference for support and PDF headers (LW- + random)
             self.reference = f"LW-{secrets.token_hex(4).upper()}"
+        if self.user_id and not self.customer_id:
+            from django.contrib.auth import get_user_model
+
+            User = get_user_model()
+            user = User.objects.filter(pk=self.user_id).first()
+            if user:
+                profile = getattr(user, "customer_profile", None)
+                if profile is not None:
+                    self.customer_id = profile.pk
+                elif getattr(user, "portal_role", None) != PortalRole.BACKOFFICE:
+                    c, _ = Customer.objects.update_or_create(
+                        user_id=user.pk,
+                        defaults={
+                            "email": user.email or "",
+                            "first_name": user.first_name or "",
+                            "last_name": user.last_name or "",
+                        },
+                    )
+                    self.customer_id = c.pk
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
@@ -220,6 +326,10 @@ class DocumentRequirement(models.Model):
         help_text=_('List of loan type codes, e.g. ["personal", "business"].'),
     )
     is_required = models.BooleanField(default=True)
+    min_files = models.PositiveIntegerField(
+        default=1,
+        help_text=_("Minimum uploads linked to this requirement (e.g. 3 payslips)."),
+    )
     sort_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)
 
@@ -236,8 +346,7 @@ class DocumentKind(models.TextChoices):
     GENERIC = "generic", _("Generic")
     IDENTITY = "identity", _("Identity")
     INCOME = "income", _("Income proof")
-    FACE_SELFIE = "face_selfie", _("Face selfie")
-    LIVENESS_VIDEO = "liveness_video", _("Liveness video")
+    ADDRESS = "address", _("Proof of address")
 
 
 class ApplicationDocument(models.Model):
@@ -265,6 +374,10 @@ class ApplicationDocument(models.Model):
     original_filename = models.CharField(max_length=255)
     content_type = models.CharField(max_length=128, blank=True)
     sha256_hex = models.CharField(max_length=64, blank=True, db_index=True)
+    validation_rule = models.TextField(
+        blank=True,
+        help_text=_("Optional rule text or validator id for this document type (ERD)."),
+    )
     file_size = models.PositiveIntegerField(default=0)
     storage_path = models.CharField(max_length=512, blank=True)
     analysis_result = models.JSONField(default=dict, blank=True)
@@ -279,10 +392,29 @@ class ApplicationDocument(models.Model):
         return f"{self.original_filename} ({self.application.reference})"
 
 
+class Notification(models.Model):
+    """In-app notification tied to a loan request (ERD)."""
+
+    loan_application = models.ForeignKey(
+        LoanApplication,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Notification #{self.pk} ({self.loan_application.reference})"
+
+
 class EligibilityKnowledgeSource(models.Model):
     """
     Admin-managed RAG sources (PDF / images) defining internal eligibility rules.
     Text is extracted, chunked, and indexed for retrieval (see core.rag_eligibility).
+    ERD name: Eligibility Condition (file).
     """
 
     title = models.CharField(max_length=255, blank=True)
@@ -306,8 +438,8 @@ class EligibilityKnowledgeSource(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        verbose_name = _("eligibility knowledge source")
-        verbose_name_plural = _("eligibility knowledge sources")
+        verbose_name = _("Eligibility condition")
+        verbose_name_plural = _("Eligibility conditions")
 
     def __str__(self) -> str:
         return self.title or self.file.name
@@ -328,6 +460,39 @@ class EligibilityKnowledgeSource(models.Model):
                 continue
             kept.append(p)
         return "\n\n".join(kept).strip()
+
+
+class IntegrationSettings(models.Model):
+    """
+    Singleton (pk=1): OpenAI and other API credentials editable in Admin.
+
+    Environment variable OPENAI_API_KEY overrides the stored value when set.
+    """
+
+    openai_api_key = models.TextField(
+        blank=True,
+        help_text=_(
+            "Used for chat, RAG extraction, and document vision. "
+            "You can also set OPENAI_API_KEY in the environment (it takes precedence)."
+        ),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Integration settings (OpenAI)")
+        verbose_name_plural = _("Integration settings (OpenAI)")
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    def __str__(self) -> str:
+        if self.openai_api_key:
+            return str(_("OpenAI integration"))
+        return str(_("OpenAI integration (not configured)"))
 
 
 class ChatRole(models.TextChoices):
