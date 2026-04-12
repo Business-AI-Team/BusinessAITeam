@@ -1,0 +1,102 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('LoanWise admin') }}{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">LoanWise</a></div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}
+<div class="lw-admin-toolbar">
+  <form action="{% url 'set_language' %}" method="post" class="lw-admin-lang-form">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <label for="lw-admin-lang" class="visually-hidden">{% trans "Language" %}</label>
+    <select name="language" id="lw-admin-lang" class="lw-admin-lang-select" aria-label="{% trans 'Language' %}">
+      {% get_current_language as LANGUAGE_CODE %}
+      {% get_available_languages as LANGUAGES %}
+      {% for code, name in LANGUAGES %}
+      <option value="{{ code }}" {% if code == LANGUAGE_CODE %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+{% endblock %}
+
+{% block dark-mode-vars %}
+<script>
+(function () {
+  try {
+    var lw = localStorage.getItem('loanwise-theme');
+    if (lw === 'dark') localStorage.setItem('theme', 'dark');
+    else if (lw === 'light') localStorage.setItem('theme', 'light');
+  } catch (e) {}
+})();
+</script>
+{{ block.super }}
+{% endblock %}
+
+{% block extrastyle %}{{ block.super }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body, button, input, select, textarea, .button, #changelist-filter h2, .module h2, .inline-group h2 {
+    font-family: Inter, system-ui, -apple-system, sans-serif !important;
+  }
+  .lw-admin-toolbar { float: right; margin: 10px 16px 0 0; }
+  .lw-admin-lang-select {
+    font-size: 0.8125rem;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--hairline-color, #ccc);
+    background: var(--body-bg, #fff);
+    color: var(--body-fg, #111);
+  }
+  html[data-theme="dark"] .lw-admin-lang-select {
+    border-color: #334155;
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+  #header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  }
+  html[data-theme="light"] #header {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-bottom: 1px solid #e2e8f0;
+  }
+  #site-name a {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #f8fafc !important;
+  }
+  html[data-theme="light"] #site-name a {
+    color: #0f172a !important;
+  }
+</style>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+(function () {
+  function syncThemeToLoanWise() {
+    try {
+      var t = localStorage.getItem('theme');
+      if (t === 'dark' || t === 'light') localStorage.setItem('loanwise-theme', t);
+    } catch (e) {}
+  }
+  window.addEventListener('load', function () {
+    document.querySelectorAll('.theme-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setTimeout(syncThemeToLoanWise, 0);
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}

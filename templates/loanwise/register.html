@@ -1,0 +1,56 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Sign up" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-md animate-fade-in-up rounded-2xl border border-slate-200 bg-white/90 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900/90">
+  <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{% trans "Create your account" %}</h1>
+  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{% trans "We will send a six-digit verification code to your email." %}</p>
+  <form method="post" class="mt-8 space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Email" %}</label>
+      <input name="email" type="email" required
+             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Username" %}</label>
+      <input name="username" type="text"
+             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "First name" %}</label>
+        <input name="first_name" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Last name" %}</label>
+        <input name="last_name" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Password" %}</label>
+      <input name="password" type="password" required minlength="8"
+             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Preferred language" %}</label>
+      <select name="preferred_language" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+        <option value="fr">Français</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+    <button type="submit" class="w-full rounded-xl bg-sky-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500">
+      {% trans "Sign up" %}
+    </button>
+  </form>
+  <p class="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
+    <a href="{% url 'verify_email_page' %}" class="font-semibold text-sky-600 hover:underline dark:text-sky-400">{% trans "Enter verification code" %}</a>
+  </p>
+  <p class="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
+    {% trans "Already have an account?" %}
+    <a href="{% url 'login_page' %}" class="font-semibold text-sky-600 hover:underline dark:text-sky-400">{% trans "Log in" %}</a>
+  </p>
+</div>
+{% endblock %}

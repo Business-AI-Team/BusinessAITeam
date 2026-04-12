@@ -1,0 +1,735 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: LoanWise 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Account created. Check your email for your verification code."
+msgstr "Account created. Check your email for your verification code."
+
+msgid ""
+"Account created. You can log in — your email is marked verified in "
+"development."
+msgstr ""
+"Account created. You can log in — your email is marked verified in "
+"development."
+
+msgid "Admin"
+msgstr "Admin"
+
+msgid "Administration"
+msgstr "Administration"
+
+msgid "AI analysis output (development only)"
+msgstr "AI analysis output (development only)"
+
+msgid "AI assistant"
+msgstr "AI assistant"
+
+msgid "AI stack"
+msgstr "AI stack"
+
+msgid "Already have an account?"
+msgstr "Already have an account?"
+
+msgid "Amount must be positive."
+msgstr "Amount must be positive."
+
+msgid "Analysis complete."
+msgstr "Analysis complete."
+
+msgid "Analysis results"
+msgstr "Analysis results"
+
+msgid ""
+"OK / Not OK shows whether the check passed. Similarity %% is an indicative "
+"score derived from DeepFace (not a legal proof)."
+msgstr ""
+"OK / Not OK shows whether the check passed. Similarity %% is an indicative "
+"score derived from DeepFace (not a legal proof)."
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Not OK"
+msgstr "Not OK"
+
+msgid "Approximate similarity with the photo on your ID: about %(pct)s%%."
+msgstr "Approximate similarity with the photo on your ID: about %(pct)s%%."
+
+msgid "Best match uses frames from your liveness video vs the ID photo."
+msgstr "Best match uses frames from your liveness video vs the ID photo."
+
+msgid "Comparison: ID photo vs uploaded selfie image."
+msgstr "Comparison: ID photo vs uploaded selfie image."
+
+msgid "Computed score after document and face checks: %(score)s"
+msgstr "Computed score after document and face checks: %(score)s"
+
+msgid ""
+"Financial base (income, amount, term): %(base)s. Pipeline adjustment "
+"(face/liveness): %(adj)s. Total: %(score)s."
+msgstr ""
+"Financial base (income, amount, term): %(base)s. Pipeline adjustment "
+"(face/liveness): %(adj)s. Total: %(score)s."
+
+msgid "Total eligibility score: %(score)s"
+msgstr "Total eligibility score: %(score)s"
+
+msgid ""
+"Liveness: validates the guided session before upload. The percentage applies "
+"only to similarity between your ID photo and your face (recording or "
+"selfie), not to movements."
+msgstr ""
+"Liveness: validates the guided session before upload. The percentage applies "
+"only to similarity between your ID photo and your face (recording or "
+"selfie), not to movements."
+
+msgid "Liveness (session security)"
+msgstr "Liveness (session security)"
+
+msgid ""
+"The recording is only sent after you complete the on-screen steps. This "
+"line confirms that the liveness session is accepted for your application."
+msgstr ""
+"The recording is only sent after you complete the on-screen steps. This "
+"line confirms that the liveness session is accepted for your application."
+
+msgid ""
+"The liveness session could not be validated. Please start again and follow "
+"the steps until the end."
+msgstr ""
+"The liveness session could not be validated. Please start again and follow "
+"the steps until the end."
+
+msgid ""
+"No liveness video was provided — only a static photo was compared to the ID. "
+"For a full check, add a liveness recording from the guided capture."
+msgstr ""
+"No liveness video was provided — only a static photo was compared to the ID. "
+"For a full check, add a liveness recording from the guided capture."
+
+msgid "Similarity: ID photo vs face (DeepFace)"
+msgstr "Similarity: ID photo vs face (DeepFace)"
+
+msgid ""
+"This percentage estimates how close the face in your recording (or selfie) is "
+"to the photo on your ID. It does not measure head movements or blinks — only "
+"facial similarity."
+msgstr ""
+"This percentage estimates how close the face in your recording (or selfie) is "
+"to the photo on your ID. It does not measure head movements or blinks — only "
+"facial similarity."
+
+msgid "Approximate similarity: about %(pct)s%%."
+msgstr "Approximate similarity: about %(pct)s%%."
+
+msgid ""
+"Face crops are taken from your validated liveness video and compared to the "
+"ID photo."
+msgstr ""
+"Face crops are taken from your validated liveness video and compared to the "
+"ID photo."
+
+msgid "Comparison uses your uploaded selfie image against the ID photo."
+msgstr "Comparison uses your uploaded selfie image against the ID photo."
+
+msgid "Could not read the ID or face image file."
+msgstr "Could not read the ID or face image file."
+
+msgid "yes"
+msgstr "yes"
+
+msgid "no"
+msgstr "no"
+
+msgid ""
+"Guided session: the recording only uploads after you complete the on-screen "
+"steps. Independent server re-scan — left: %(l)s, right: %(r)s, blink: %(b)s "
+"(may differ from the browser for technical reasons)."
+msgstr ""
+"Guided session: the recording only uploads after you complete the on-screen "
+"steps. Independent server re-scan — left: %(l)s, right: %(r)s, blink: %(b)s "
+"(may differ from the browser for technical reasons)."
+
+msgid ""
+"(Upload did not include client session attestation — re-record with the latest "
+"app.)"
+msgstr ""
+"(Upload did not include client session attestation — re-record with the latest "
+"app.)"
+
+msgid ""
+"Overall liveness is accepted because the guided session completed before "
+"upload."
+msgstr ""
+"Overall liveness is accepted because the guided session completed before "
+"upload."
+
+msgid "Could not read the ID or selfie file."
+msgstr "Could not read the ID or selfie file."
+
+msgid "DeepFace is not installed. Add optional dependencies (see requirements-ai.txt)."
+msgstr "DeepFace is not installed. Add optional dependencies (see requirements-ai.txt)."
+
+msgid "Eligibility score (pipeline)"
+msgstr "Eligibility score (pipeline)"
+
+msgid "Face match (ID vs video or selfie)"
+msgstr "Face match (ID vs video or selfie)"
+
+msgid "Face vs ID (DeepFace)"
+msgstr "Face vs ID (DeepFace)"
+
+msgid "Head turn left: %(s)s — Head turn right: %(t)s — Blink: %(b)s"
+msgstr "Head turn left: %(s)s — Head turn right: %(t)s — Blink: %(b)s"
+
+msgid "Liveness (movements in the video)"
+msgstr "Liveness (movements in the video)"
+
+msgid "Missing"
+msgstr "Missing"
+
+msgid "No liveness video was available; only a static selfie was used."
+msgstr "No liveness video was available; only a static selfie was used."
+
+msgid "Upload a liveness video so we can check movement and blink."
+msgstr "Upload a liveness video so we can check movement and blink."
+
+msgid "API-first · AI-powered"
+msgstr "API-first · AI-powered"
+
+msgid "Application not found."
+msgstr "Application not found."
+
+msgid "Application workspace"
+msgstr "Application workspace"
+
+msgid "Applications & users"
+msgstr "Applications & users"
+
+msgid "Approved"
+msgstr "Approved"
+
+msgid "Assistant"
+msgstr "Assistant"
+
+msgid "Back to log in"
+msgstr "Back to log in"
+
+msgid "Blink your eyes naturally once or twice."
+msgstr "Blink your eyes naturally once or twice."
+
+msgid "Business AI Team"
+msgstr "Business AI Team"
+
+msgid "Business loan"
+msgstr "Business loan"
+
+msgid "Camera recording is not supported in this browser."
+msgstr "Camera recording is not supported in this browser."
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid ""
+"Click Start: the AI guides you in real time. When the sequence is validated,"
+" recording stops automatically and the video is sent. Compare it with your "
+"ID by running the AI pipeline."
+msgstr ""
+"Click Start: the AI guides you in real time. When the sequence is validated,"
+" recording stops automatically and the video is sent. Compare it with your "
+"ID by running the AI pipeline."
+
+msgid "Complete the chat steps, upload documents, then run the AI pipeline."
+msgstr "Complete the chat steps, upload documents, then run the AI pipeline."
+
+msgid "Completed"
+msgstr "Completed"
+
+msgid "Could not access the camera."
+msgstr "Could not access the camera."
+
+msgid "Could not create application. Ensure you are logged in."
+msgstr "Could not create application. Ensure you are logged in."
+
+msgid "Could not reach the server. Check your connection and try again."
+msgstr "Could not reach the server. Check your connection and try again."
+
+msgid "Create your account"
+msgstr "Create your account"
+
+msgid "Creating…"
+msgstr "Creating…"
+
+msgid "Dark"
+msgstr "Dark"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid ""
+"Development: the email is printed in the runserver terminal. Your "
+"verification code is %(code)s. You can also open: %(url)s"
+msgstr ""
+"Development: the email is printed in the runserver terminal. Your "
+"verification code is %(code)s. You can also open: %(url)s"
+
+msgid ""
+"Development: verified email is not required to run the pipeline. Configure "
+"SMTP and set LOANWISE_REQUIRE_EMAIL_VERIFICATION=true for production-like "
+"behaviour."
+msgstr ""
+"Development: verified email is not required to run the pipeline. Configure "
+"SMTP and set LOANWISE_REQUIRE_EMAIL_VERIFICATION=true for production-like "
+"behaviour."
+
+msgid "document requirement"
+msgstr "document requirement"
+
+msgid "document requirements"
+msgstr "document requirements"
+
+msgid "Documents"
+msgstr "Documents"
+
+msgid "Download PDF"
+msgstr "Download PDF"
+
+msgid "Draft"
+msgstr "Draft"
+
+msgid "Eligibility preview"
+msgstr "Eligibility preview"
+
+msgid "Eligibility score:"
+msgstr "Eligibility score:"
+
+msgid "Email"
+msgstr "Email"
+
+msgid "email address"
+msgstr "email address"
+
+msgid ""
+"Email verification is required to run the AI pipeline. If you did not "
+"receive an email, check the terminal where runserver is running (console "
+"email backend), or ask an administrator to mark your account as verified."
+msgstr ""
+"Email verification is required to run the AI pipeline. If you did not "
+"receive an email, check the terminal where runserver is running (console "
+"email backend), or ask an administrator to mark your account as verified."
+
+msgid "English"
+msgstr "English"
+
+msgid "Enter the six-digit code we sent to your inbox after registration."
+msgstr "Enter the six-digit code we sent to your inbox after registration."
+
+msgid "Enter verification code"
+msgstr "Enter verification code"
+
+msgid "Explore API"
+msgstr "Explore API"
+
+msgid "Face selfie"
+msgstr "Face selfie"
+
+msgid "face_selfie"
+msgstr "face_selfie"
+
+msgid "Figures are indicative for the hackathon demo."
+msgstr "Figures are indicative for the hackathon demo."
+
+msgid "Files are hashed (SHA-256) and removed after analysis."
+msgstr "Files are hashed (SHA-256) and removed after analysis."
+
+msgid "First name"
+msgstr "First name"
+
+msgid ""
+"Follow the live instructions below: face visible, turn left, turn right, "
+"then blink. Then stop and upload. The recording is compared to your ID when "
+"you run the pipeline."
+msgstr ""
+"Follow the live instructions below: face visible, turn left, turn right, "
+"then blink. Then stop and upload. The recording is compared to your ID when "
+"you run the pipeline."
+
+msgid "FR · EN"
+msgstr "FR · EN"
+
+msgid "French"
+msgstr "French"
+
+msgid ""
+"Full JSON from face/liveness checks and document analysis — visible when "
+"DEBUG is true."
+msgstr ""
+"Full JSON from face/liveness checks and document analysis — visible when "
+"DEBUG is true."
+
+msgid "generic"
+msgstr "generic"
+
+msgid "Generic"
+msgstr "Generic"
+
+msgid "Get started"
+msgstr "Get started"
+
+msgid "Home"
+msgstr "Home"
+
+msgid "identity"
+msgstr "identity"
+
+msgid "Identity"
+msgstr "Identity"
+
+msgid "Important dates"
+msgstr "Important dates"
+
+msgid "In progress"
+msgstr "In progress"
+
+msgid "In progress…"
+msgstr "In progress…"
+
+msgid "Income proof"
+msgstr "Income proof"
+
+msgid "Invalid email or password."
+msgstr "Invalid email or password."
+
+msgid ""
+"Invalid email or verification code. Check the code in your email and try "
+"again."
+msgstr ""
+"Invalid email or verification code. Check the code in your email and try "
+"again."
+
+msgid "LangGraph · Florence-2"
+msgstr "LangGraph · Florence-2"
+
+msgid "Language"
+msgstr "Language"
+
+msgid "Language for this application (UI + AI agents)."
+msgstr "Language for this application (UI + AI agents)."
+
+msgid "Languages"
+msgstr "Languages"
+
+msgid "Last name"
+msgstr "Last name"
+
+msgid "Light"
+msgstr "Light"
+
+msgid "List of loan type codes, e.g. [\"personal\", \"business\"]."
+msgstr "List of loan type codes, e.g. [\"personal\", \"business\"]."
+
+msgid "Live"
+msgstr "Live"
+
+msgid "Liveness cancelled."
+msgstr "Liveness cancelled."
+
+msgid "Liveness sequence complete — you can stop recording and upload."
+msgstr "Liveness sequence complete — you can stop recording and upload."
+
+msgid "Liveness video"
+msgstr "Liveness video"
+
+msgid "liveness_video"
+msgstr "liveness_video"
+
+msgid ""
+"LoanWise guides applicants with a multilingual AI assistant, secure document"
+" analysis, and clear ROI insights — built for modern fintech teams."
+msgstr ""
+"LoanWise guides applicants with a multilingual AI assistant, secure document"
+" analysis, and clear ROI insights — built for modern fintech teams."
+
+msgid "LoanWise — users, applications, tokens"
+msgstr "LoanWise — users, applications, tokens"
+
+msgid "LoanWise admin"
+msgstr "LoanWise admin"
+
+msgid "LoanWise administration"
+msgstr "LoanWise administration"
+
+msgid "Log in"
+msgstr "Log in"
+
+msgid "Log out"
+msgstr "Log out"
+
+msgid "Loading face detection model…"
+msgstr "Loading face detection model…"
+
+msgid ""
+"Look straight at the camera. Next, we will ask you to turn your head left, "
+"then right, then blink."
+msgstr ""
+"Look straight at the camera. Next, we will ask you to turn your head left, "
+"then right, then blink."
+
+msgid "Mortgage"
+msgstr "Mortgage"
+
+msgid "New application"
+msgstr "New application"
+
+msgid "No account?"
+msgstr "No account?"
+
+msgid "No applications yet. Start your first check."
+msgstr "No applications yet. Start your first check."
+
+msgid "No face detected — position yourself in front of the camera."
+msgstr "No face detected — position yourself in front of the camera."
+
+msgid "No video data to upload."
+msgstr "No video data to upload."
+
+msgid "Now turn your head slowly to the right (your right)."
+msgstr "Now turn your head slowly to the right (your right)."
+
+msgid "Open admin"
+msgstr "Open admin"
+
+msgid "Open dashboard"
+msgstr "Open dashboard"
+
+msgid ""
+"Open the camera and record a short clip. Slowly turn your head left, then "
+"right (about 10–20 seconds). This is compared to your ID photo when you run "
+"the pipeline."
+msgstr ""
+"Open the camera and record a short clip. Slowly turn your head left, then "
+"right (about 10–20 seconds). This is compared to your ID photo when you run "
+"the pipeline."
+
+msgid "Password"
+msgstr "Password"
+
+msgid "Permissions"
+msgstr "Permissions"
+
+msgid "Personal info"
+msgstr "Personal info"
+
+msgid "Personal loan"
+msgstr "Personal loan"
+
+msgid "Pipeline progress"
+msgstr "Pipeline progress"
+
+msgid "Please correct the errors below."
+msgstr "Please correct the errors below."
+
+msgid "Please enter your email and the verification code."
+msgstr "Please enter your email and the verification code."
+
+msgid "Please verify your email before running the pipeline."
+msgstr "Please verify your email before running the pipeline."
+
+msgid "Preferences"
+msgstr "Preferences"
+
+msgid "Preferred language"
+msgstr "Preferred language"
+
+msgid "Principal"
+msgstr "Principal"
+
+msgid "Processing…"
+msgstr "Processing…"
+
+msgid ""
+"Real-time analysis unavailable (MediaPipe did not load). Allow scripts from "
+"the CDN or try another browser."
+msgstr ""
+"Real-time analysis unavailable (MediaPipe did not load). Allow scripts from "
+"the CDN or try another browser."
+
+msgid ""
+"Real-time face guidance unavailable (MediaPipe could not load). You can "
+"still record."
+msgstr ""
+"Real-time face guidance unavailable (MediaPipe could not load). You can "
+"still record."
+
+msgid "Recording…"
+msgstr "Recording…"
+
+msgid "Rejected"
+msgstr "Rejected"
+
+msgid "Requirement"
+msgstr "Requirement"
+
+msgid "ROI"
+msgstr "ROI"
+
+msgid "ROI & impact"
+msgstr "ROI & impact"
+
+msgid "Run AI pipeline"
+msgstr "Run AI pipeline"
+
+msgid "Running document analysis and scoring…"
+msgstr "Running document analysis and scoring…"
+
+msgid "The pipeline cannot run until these required documents are uploaded:"
+msgstr "The pipeline cannot run until these required documents are uploaded:"
+
+msgid "Upload all required documents, then run the pipeline again."
+msgstr "Upload all required documents, then run the pipeline again."
+
+msgid "Score"
+msgstr "Score"
+
+msgid "Send"
+msgstr "Send"
+
+msgid "Sending the video to the server…"
+msgstr "Sending the video to the server…"
+
+msgid "Sending video…"
+msgstr "Sending video…"
+
+msgid "Sequence OK — you can stop and upload."
+msgstr "Sequence OK — you can stop and upload."
+
+msgid "Sequence validated — closing the camera and sending your video…"
+msgstr "Sequence validated — closing the camera and sending your video…"
+
+msgid "SHA-256 + auto-delete"
+msgstr "SHA-256 + auto-delete"
+
+msgid "Sign in to continue your loan journey."
+msgstr "Sign in to continue your loan journey."
+
+msgid "Sign up"
+msgstr "Sign up"
+
+msgid "Smart Loan Eligibility Checker"
+msgstr "Smart Loan Eligibility Checker"
+
+msgid ""
+"Staff: use the administration panel to manage users, loan applications, and "
+"API tokens."
+msgstr ""
+"Staff: use the administration panel to manage users, loan applications, and "
+"API tokens."
+
+msgid "Start camera & record"
+msgstr "Start camera & record"
+
+msgid "Start liveness check"
+msgstr "Start liveness check"
+
+msgid "Step-by-step guidance in your language."
+msgstr "Step-by-step guidance in your language."
+
+msgid "Stop & upload video"
+msgstr "Stop & upload video"
+
+msgid "Switch to dark mode"
+msgstr "Switch to dark mode"
+
+msgid "Switch to light mode"
+msgstr "Switch to light mode"
+
+msgid "System"
+msgstr "System"
+
+msgid "The code must contain exactly six digits."
+msgstr "The code must contain exactly six digits."
+
+msgid "This email was already verified. You are signed in."
+msgstr "This email was already verified. You are signed in."
+
+msgid "Track eligibility, documents, and AI-assisted progress."
+msgstr "Track eligibility, documents, and AI-assisted progress."
+
+msgid "Turn your head slowly to the left (your left)."
+msgstr "Turn your head slowly to the left (your left)."
+
+msgid "Type your message…"
+msgstr "Type your message…"
+
+msgid "Under review"
+msgstr "Under review"
+
+msgid "Upload"
+msgstr "Upload"
+
+msgid "Uploading video…"
+msgstr "Uploading video…"
+
+msgid "Uploading…"
+msgstr "Uploading…"
+
+msgid "user"
+msgstr "user"
+
+msgid "User"
+msgstr "User"
+
+msgid "Username"
+msgstr "Username"
+
+msgid "users"
+msgstr "users"
+
+msgid "Verification code"
+msgstr "Verification code"
+
+msgid "Verify"
+msgstr "Verify"
+
+msgid "Verify your email"
+msgstr "Verify your email"
+
+msgid "Video received. Run the AI pipeline to compare with your ID."
+msgstr "Video received. Run the AI pipeline to compare with your ID."
+
+msgid ""
+"Video received. You can run the AI pipeline to compare it with your ID."
+msgstr ""
+"Video received. You can run the AI pipeline to compare it with your ID."
+
+msgid "Video upload failed."
+msgstr "Video upload failed."
+
+msgid ""
+"We could not send the email. Enter the code from the server log or ask an "
+"administrator."
+msgstr ""
+"We could not send the email. Enter the code from the server log or ask an "
+"administrator."
+
+msgid "We will send a six-digit verification code to your email."
+msgstr "We will send a six-digit verification code to your email."
+
+msgid "Welcome back"
+msgstr "Welcome back"
+
+msgid "Your applications"
+msgstr "Your applications"
+
+msgid "Your email is verified. Welcome!"
+msgstr "Your email is verified. Welcome!"

@@ -1,0 +1,98 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Dashboard" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-8" x-data="dashboardApp()" x-init="csrf = getCookie('csrftoken')">
+  {% if user.is_staff %}
+  <div class="flex flex-col gap-3 rounded-2xl border border-amber-300/80 bg-amber-50/90 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:bg-amber-950/40">
+    <p class="text-sm text-amber-950 dark:text-amber-100">
+      {% trans "Staff: use the administration panel to manage users, loan applications, and API tokens." %}
+    </p>
+    <a href="{% url 'admin:index' %}"
+       class="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-amber-500"
+       target="_blank" rel="noopener noreferrer">
+      {% trans "Open admin" %}
+    </a>
+  </div>
+  {% endif %}
+  <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{% trans "Your applications" %}</h1>
+      <p class="mt-1 text-slate-600 dark:text-slate-400">{% trans "Track eligibility, documents, and AI-assisted progress." %}</p>
+    </div>
+    <button type="button" @click="createApp()"
+            class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500 disabled:opacity-50"
+            :disabled="loading">
+      <span x-show="!loading">{% trans "New application" %}</span>
+      <span x-show="loading" x-cloak>{% trans "Creating…" %}</span>
+    </button>
+  </div>
+
+  {% if not applications %}
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
+    <p class="text-slate-600 dark:text-slate-300">{% trans "No applications yet. Start your first check." %}</p>
+  </div>
+  {% else %}
+  <div class="grid gap-4">
+    {% for app in applications %}
+    <a href="{% url 'application_detail' app.pk %}"
+       class="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-sky-600 sm:flex-row sm:items-center">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">{{ app.reference }}</p>
+        <p class="mt-1 font-medium text-slate-900 dark:text-white">{{ app.get_loan_type_display }} · {{ app.get_status_display }}</p>
+        <p class="text-sm text-slate-500">{{ app.created_at|date:"SHORT_DATETIME_FORMAT" }}</p>
+      </div>
+      <div class="mt-4 flex items-center gap-3 sm:mt-0">
+        {% if app.eligibility_score %}
+        <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-800 dark:text-emerald-200">{{ app.eligibility_score }} / 100</span>
+        {% endif %}
+        <span class="text-slate-400 transition group-hover:translate-x-1">→</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function dashboardApp() {
+    return {
+      loading: false,
+      csrf: '',
+      getCookie(name) {
+        const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return v ? decodeURIComponent(v[2]) : '';
+      },
+      async createApp() {
+        this.loading = true;
+        try {
+          const lang = document.documentElement.lang || 'fr';
+          const res = await fetch('/api/applications/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ loan_type: 'personal', language: lang.startsWith('en') ? 'en' : 'fr' }),
+          });
+          if (!res.ok) throw new Error('create failed');
+          const data = await res.json();
+          /* From /dashboard/ or /en/dashboard/, go up one segment then into applications/<id>/ */
+          const id = data.id ?? data.pk;
+          if (id == null) throw new Error('no id');
+          window.location.href = '../applications/' + id + '/';
+        } catch (e) {
+          alert('{% filter escapejs %}{% trans "Could not create application. Ensure you are logged in." %}{% endfilter %}');
+        } finally {
+          this.loading = false;
+        }
+      },
+    };
+  }
+</script>
+{% endblock %}

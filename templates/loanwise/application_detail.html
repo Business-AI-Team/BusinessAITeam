@@ -1,0 +1,560 @@
+{% extends "loanwise/base.html" %}
+{% load i18n static %}
+
+{% block title %}{{ application.reference }} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="space-y-10" x-data="appWorkspace({{ application.id }}, { initialProgress: {{ lw_initial_progress }}, requireEmail: {{ lw_require_email|yesno:'true,false' }}, emailVerified: {{ lw_email_verified|yesno:'true,false' }} })" x-init="csrf = getCookie('csrftoken'); init()">
+  {{ lw_liveness_msg_dict|json_script:"lw-liveness-msg-data" }}
+  {% if lw_require_email and not lw_email_verified %}
+  <div class="animate-fade-in-up rounded-2xl border border-amber-300/80 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+    {% trans "Email verification is required to run the AI pipeline. If you did not receive an email, check the terminal where runserver is running (console email backend), or ask an administrator to mark your account as verified." %}
+  </div>
+  {% elif not lw_require_email %}
+  <div class="animate-fade-in-up rounded-2xl border border-sky-300/60 bg-sky-50/80 p-4 text-sm text-sky-950 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
+    {% trans "Development: verified email is not required to run the pipeline. Configure SMTP and set LOANWISE_REQUIRE_EMAIL_VERIFICATION=true for production-like behaviour." %}
+  </div>
+  {% endif %}
+
+  <div class="animate-fade-in-up flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">{{ application.reference }}</p>
+      <h1 class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{% trans "Application workspace" %}</h1>
+      <p class="mt-2 text-slate-600 dark:text-slate-400">
+        {{ application.get_loan_type_display }} · {{ application.get_status_display }}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a :href="'/api/applications/' + appId + '/export_pdf/'" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        {% trans "Download PDF" %}
+      </a>
+      <button type="button" @click="runOrchestrator()"
+              class="rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:from-sky-500 hover:to-indigo-500 disabled:opacity-50"
+              :disabled="busy">
+        <span x-show="!busy">{% trans "Run AI pipeline" %}</span>
+        <span x-show="busy" x-cloak>{% trans "Processing…" %}</span>
+      </button>
+    </div>
+  </div>
+
+  {% if lw_rag_eligibility.available %}
+  <div class="animate-fade-in-up rounded-2xl border border-emerald-200/80 bg-emerald-50/90 p-5 dark:border-emerald-800/60 dark:bg-emerald-950/35">
+    <h2 class="text-lg font-semibold text-emerald-950 dark:text-emerald-100">{% trans "Indicative eligibility (from policy documents)" %}</h2>
+    <p class="mt-1 text-xs text-emerald-800/90 dark:text-emerald-200/80">
+      {% trans "Ranges below come from documents uploaded by your administrator. They are not a guarantee of approval." %}
+    </p>
+    <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+      <div>
+        <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Amount range" %}</dt>
+        <dd class="mt-0.5 font-semibold tabular-nums text-emerald-950 dark:text-emerald-50">
+          {% if lw_rag_eligibility.min_amount is not None and lw_rag_eligibility.max_amount is not None %}
+            {{ lw_rag_eligibility.min_amount|floatformat:0 }} – {{ lw_rag_eligibility.max_amount|floatformat:0 }} {{ lw_rag_eligibility.currency }}
+          {% else %}
+            —
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Repayment terms (months)" %}</dt>
+        <dd class="mt-0.5 font-semibold text-emerald-950 dark:text-emerald-50">
+          {% if lw_rag_eligibility.term_months_options %}
+            {{ lw_rag_eligibility.term_months_options|join:", " }}
+          {% else %}
+            —
+          {% endif %}
+        </dd>
+      </div>
+    </dl>
+    {% if lw_rag_summary %}
+    <p class="mt-3 text-sm leading-relaxed text-emerald-900/90 dark:text-emerald-100/90">{{ lw_rag_summary }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Progress -->
+  <div class="animate-fade-in-up animate-delay-1 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+    <div class="mb-4 flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Pipeline progress" %}</h2>
+      <span class="text-xs text-slate-500" x-text="statusLabel"></span>
+    </div>
+    <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+      <div class="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-700"
+           :style="'width:' + progressPct + '%'"></div>
+    </div>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400" x-html="progressHint"></p>
+  </div>
+
+  {% if lw_analysis_rows %}
+  <div class="animate-fade-in-up rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Analysis results" %}</h2>
+    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+      {% trans "Liveness: validates the guided session before upload. The percentage applies only to similarity between your ID photo and your face (recording or selfie), not to movements." %}
+    </p>
+    <ul class="mt-4 space-y-4">
+      {% for row in lw_analysis_rows %}
+      <li class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <span class="font-medium text-slate-800 dark:text-slate-100">{{ row.title }}</span>
+          {% if row.ok %}
+          <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">{% trans "OK" %}</span>
+          {% else %}
+          <span class="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950/50 dark:text-rose-200">{% trans "Not OK" %}</span>
+          {% endif %}
+        </div>
+        {% if row.percent is not None %}
+        <div class="mt-3 flex items-center gap-3">
+          <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+            <div class="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500" style="width: {{ row.percent|floatformat:1 }}%"></div>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ row.percent|floatformat:1 }}%</span>
+        </div>
+        {% endif %}
+        {% if row.detail %}
+        <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{{ row.detail }}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="grid gap-8 lg:grid-cols-2">
+    <!-- Chat -->
+    <div class="animate-fade-in-up animate-delay-2 flex flex-col rounded-2xl border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80" style="min-height: 420px">
+      <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "AI assistant" %}</h2>
+        <p class="text-xs text-slate-500">{% trans "Step-by-step guidance in your language." %}</p>
+      </div>
+      <div class="flex-1 space-y-3 overflow-y-auto p-4 text-sm" id="chat-box">
+        <template x-for="m in messages" :key="m.id">
+          <div class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
+            <div class="max-w-[90%] rounded-2xl px-3 py-2"
+                 :class="m.role === 'user' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'"
+                 x-text="m.content"></div>
+          </div>
+        </template>
+      </div>
+      <form class="border-t border-slate-200 p-3 dark:border-slate-800" @submit.prevent="sendChat()">
+        <div class="flex gap-2">
+          <input x-model="input" class="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="{% trans 'Type your message…' %}">
+          <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-sky-600">{% trans "Send" %}</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Upload + ROI -->
+    <div class="space-y-6">
+      <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "Files are hashed (SHA-256) and removed after analysis." %}</p>
+        <form class="mt-4 space-y-3" @submit.prevent="uploadDoc()">
+          <input type="file" x-ref="fileInput" class="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-sky-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white">
+          <div class="flex gap-2 text-xs">
+            <select x-model="reqId" class="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 dark:border-slate-700 dark:bg-slate-950">
+              <option value="">{% trans "Requirement" %}</option>
+              <template x-for="r in requirements" :key="r.id">
+                <option :value="r.id" x-text="r.label"></option>
+              </template>
+            </select>
+            <select x-model="docKind" class="w-44 rounded-lg border border-slate-200 bg-white px-2 py-2 dark:border-slate-700 dark:bg-slate-950">
+              <option value="generic">{% trans "generic" %}</option>
+              <option value="face_selfie">{% trans "face_selfie" %}</option>
+              <option value="identity">{% trans "identity" %}</option>
+              <option value="liveness_video">{% trans "liveness_video" %}</option>
+            </select>
+          </div>
+          <button type="submit" class="w-full rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-800 hover:border-sky-400 dark:border-slate-700 dark:text-slate-100" :disabled="uploading">
+            <span x-show="!uploading">{% trans "Upload" %}</span>
+            <span x-show="uploading" x-cloak>{% trans "Uploading…" %}</span>
+          </button>
+        </form>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Liveness video" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">
+          {% trans "Click Start: the AI guides you in real time. When the sequence is validated, recording stops automatically and the video is sent. Compare it with your ID by running the AI pipeline." %}
+        </p>
+        <div class="relative mt-3 overflow-hidden rounded-xl ring-1 ring-slate-200 dark:ring-slate-700">
+          <video x-ref="livenessPreview"
+                 playsinline
+                 webkit-playsinline
+                 muted
+                 autoplay
+                 class="aspect-video min-h-[192px] w-full -scale-x-100 transform bg-slate-900 object-cover"
+          ></video>
+          <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-3 pb-3 pt-10">
+            <p class="text-center text-sm font-semibold leading-snug text-white drop-shadow-md" x-text="livenessMessage"></p>
+            <p class="mt-2 text-center text-xs font-medium text-emerald-300" x-show="livenessVideoSaved" x-cloak>
+              {% trans "Video received. Run the AI pipeline to compare with your ID." %}
+            </p>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" @click="livenessStart()"
+                  class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+                  :disabled="livenessRecording || livenessUploading">
+            <span x-show="!livenessRecording && !livenessUploading">{% trans "Start liveness check" %}</span>
+            <span x-show="livenessRecording" x-cloak>{% trans "In progress…" %}</span>
+            <span x-show="livenessUploading && !livenessRecording" x-cloak>{% trans "Sending video…" %}</span>
+          </button>
+          <button type="button" @click="livenessCancel()"
+                  class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-800 hover:border-red-400 dark:border-slate-600 dark:text-slate-100"
+                  :disabled="!livenessRecording || livenessUploading">
+            {% trans "Cancel" %}
+          </button>
+        </div>
+        <p class="mt-2 text-xs text-slate-500" x-show="livenessUploading" x-cloak>{% trans "Sending video…" %}</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-xl dark:border-slate-700">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-sky-300">{% trans "ROI & impact" %}</h2>
+        <dl class="mt-4 space-y-2 text-sm">
+          <div class="flex justify-between"><dt>{% trans "Score" %}</dt><dd class="font-semibold">{{ application.eligibility_score|default:"—" }}</dd></div>
+          <div class="flex justify-between"><dt>{% trans "Principal" %}</dt><dd>{{ application.amount_requested }}</dd></div>
+        </dl>
+        <p class="mt-4 text-xs text-slate-300">{% trans "Figures are indicative for the hackathon demo." %}</p>
+      </div>
+    </div>
+  </div>
+
+  {% if lw_ai_debug_json %}
+  <div class="animate-fade-in-up rounded-2xl border border-amber-400/60 bg-amber-50/90 p-4 dark:border-amber-700 dark:bg-amber-950/40">
+    <h2 class="text-sm font-semibold text-amber-950 dark:text-amber-100">{% trans "AI analysis output (development only)" %}</h2>
+    <p class="mt-1 text-xs text-amber-900/80 dark:text-amber-200/90">{% trans "Full JSON from face/liveness checks and document analysis — visible when DEBUG is true." %}</p>
+    <pre class="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-4 font-mono text-[11px] leading-relaxed text-emerald-200">{{ lw_ai_debug_json }}</pre>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/loanwise_liveness_realtime.js' %}"></script>
+<script>
+  function lwReadLivenessMsgs() {
+    var el = document.getElementById('lw-liveness-msg-data');
+    if (!el) return {};
+    try { return JSON.parse(el.textContent); } catch (e) { return {}; }
+  }
+  function appWorkspace(appId, opts) {
+    opts = opts || {};
+    var ip = typeof opts.initialProgress === 'number' ? opts.initialProgress : 15;
+    return {
+      appId,
+      requireEmail: !!opts.requireEmail,
+      emailVerified: !!opts.emailVerified,
+      csrf: '',
+      input: '',
+      messages: [],
+      requirements: [],
+      reqId: '',
+      docKind: 'generic',
+      busy: false,
+      uploading: false,
+      livenessRecording: false,
+      livenessUploading: false,
+      livenessChunks: [],
+      mediaRecorder: null,
+      livenessStream: null,
+      livenessMessage: '',
+      livenessGuideComplete: false,
+      livenessVideoSaved: false,
+      _livenessFinalizing: false,
+      livenessRt: null,
+      livenessMessages: lwReadLivenessMsgs(),
+      progressPct: ip,
+      statusLabel: '{{ application.get_status_display|escapejs }}',
+      progressHint: '{% filter escapejs %}{% trans "Complete the chat steps, upload documents, then run the AI pipeline." %}{% endfilter %}',
+      getCookie(name) {
+        const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return v ? decodeURIComponent(v[2]) : '';
+      },
+      lwApiErrorDetail(data) {
+        if (!data || typeof data !== 'object') return '';
+        if (data.error && data.messages) {
+          const m = data.messages;
+          if (m && typeof m === 'object' && m.detail !== undefined && m.detail !== null) {
+            return Array.isArray(m.detail) ? m.detail.join(' ') : String(m.detail);
+          }
+        }
+        if (data.detail !== undefined && data.detail !== null) return String(data.detail);
+        return '';
+      },
+      async init() {
+        await this.loadMessages();
+        await this.loadRequirements();
+      },
+      async loadMessages() {
+        const res = await fetch('/api/applications/' + this.appId + '/messages/', { credentials: 'same-origin' });
+        if (res.ok) this.messages = await res.json();
+      },
+      async loadRequirements() {
+        const lang = document.documentElement.lang || 'fr';
+        const res = await fetch('/api/requirements/?lang=' + encodeURIComponent(lang), { credentials: 'same-origin' });
+        if (res.ok) this.requirements = await res.json();
+      },
+      async sendChat() {
+        if (!this.input.trim()) return;
+        const res = await fetch('/api/applications/' + this.appId + '/chat/', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCookie('csrftoken') },
+          body: JSON.stringify({ message: this.input }),
+        });
+        this.input = '';
+        if (res.ok) {
+          const data = await res.json();
+          await this.loadMessages();
+          if (data.reply) {
+            this.progressPct = Math.min(88, this.progressPct + 10);
+          }
+        }
+      },
+      async livenessStart() {
+        if (!navigator.mediaDevices || !window.MediaRecorder) {
+          alert('{% filter escapejs %}{% trans "Camera recording is not supported in this browser." %}{% endfilter %}');
+          return;
+        }
+        if (!window.LoanWiseLivenessRT) {
+          alert('{% filter escapejs %}{% trans "Real-time analysis unavailable (MediaPipe did not load). Allow scripts from the CDN or try another browser." %}{% endfilter %}');
+          return;
+        }
+        try {
+          this.livenessVideoSaved = false;
+          if (this.livenessStream) {
+            this.livenessStream.getTracks().forEach(function (t) { t.stop(); });
+            this.livenessStream = null;
+          }
+          this.livenessChunks = [];
+          const constraints = {
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1280, min: 320 },
+              height: { ideal: 720, min: 240 },
+            },
+            audio: false,
+          };
+          try {
+            this.livenessStream = await navigator.mediaDevices.getUserMedia(constraints);
+          } catch (cErr) {
+            this.livenessStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          }
+          const v = this.$refs.livenessPreview;
+          if (!v) return;
+          v.srcObject = this.livenessStream;
+          v.muted = true;
+          v.setAttribute('playsinline', '');
+          v.setAttribute('webkit-playsinline', '');
+          v.playsInline = true;
+          if (typeof this.$nextTick === 'function') {
+            await this.$nextTick();
+          } else {
+            await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+          }
+          try {
+            await v.play();
+          } catch (playErr) {
+            console.warn('liveness preview play()', playErr);
+          }
+          this.livenessMessage = this.livenessMessages.show_face || '';
+          this.livenessGuideComplete = false;
+          if (this.livenessRt) {
+            try { this.livenessRt.stop(); } catch (e) {}
+            this.livenessRt = null;
+          }
+          var self = this;
+          this.livenessRt = window.LoanWiseLivenessRT.create(v, {
+            messages: this.livenessMessages,
+            onHint: function (text) { self.livenessMessage = text; },
+            onSequenceComplete: function () { self.livenessFinalizeUpload(); },
+          });
+          try {
+            await Promise.resolve(this.livenessRt.start());
+          } catch (e1) {
+            this.livenessMessage = this.livenessMessages.no_lib || '';
+            if (this.livenessStream) {
+              this.livenessStream.getTracks().forEach(function (t) { t.stop(); });
+              this.livenessStream = null;
+            }
+            v.srcObject = null;
+            this.livenessRt = null;
+            alert(this.livenessMessages.no_lib || '');
+            return;
+          }
+          const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+            ? 'video/webm;codecs=vp9'
+            : (MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '');
+          const mr = new MediaRecorder(this.livenessStream, mime ? { mimeType: mime } : {});
+          mr.ondataavailable = (e) => { if (e.data && e.data.size) this.livenessChunks.push(e.data); };
+          mr.start(250);
+          this.mediaRecorder = mr;
+          this.livenessRecording = true;
+        } catch (e) {
+          alert('{% filter escapejs %}{% trans "Could not access the camera." %}{% endfilter %}');
+        }
+      },
+      async livenessFinalizeUpload() {
+        if (this._livenessFinalizing) return;
+        this._livenessFinalizing = true;
+        this.livenessGuideComplete = true;
+        try {
+          if (this.livenessRt) {
+            try { this.livenessRt.stop(); } catch (e) {}
+            this.livenessRt = null;
+          }
+          if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+            this.mediaRecorder.stop();
+            await new Promise((r) => setTimeout(r, 650));
+          }
+          if (this.livenessStream) {
+            this.livenessStream.getTracks().forEach((t) => t.stop());
+            if (this.$refs.livenessPreview) this.$refs.livenessPreview.srcObject = null;
+            this.livenessStream = null;
+          }
+          this.livenessRecording = false;
+          this.mediaRecorder = null;
+          this.livenessMessage = this.livenessMessages.uploading_auto || '';
+          if (!this.livenessChunks.length) {
+            alert('{% filter escapejs %}{% trans "No video data to upload." %}{% endfilter %}');
+            return;
+          }
+          this.livenessUploading = true;
+          const blob = new Blob(this.livenessChunks, { type: 'video/webm' });
+          const fd = new FormData();
+          fd.append('file', blob, 'liveness.webm');
+          fd.append('kind', 'liveness_video');
+          fd.append('client_liveness_completed', 'true');
+          const res = await fetch('/api/documents/upload/' + this.appId + '/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': this.getCookie('csrftoken') },
+            body: fd,
+          });
+          if (res.ok) {
+            this.progressPct = Math.min(88, this.progressPct + 12);
+            this.livenessChunks = [];
+            this.livenessVideoSaved = true;
+            this.livenessMessage = this.livenessMessages.video_saved_ok || '';
+          } else {
+            alert('{% filter escapejs %}{% trans "Video upload failed." %}{% endfilter %}');
+          }
+        } finally {
+          this.livenessUploading = false;
+          this._livenessFinalizing = false;
+        }
+      },
+      async livenessCancel() {
+        if (this._livenessFinalizing) return;
+        if (this.livenessRt) {
+          try { this.livenessRt.stop(); } catch (e) {}
+          this.livenessRt = null;
+        }
+        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+          this.mediaRecorder.stop();
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        this.livenessChunks = [];
+        if (this.livenessStream) {
+          this.livenessStream.getTracks().forEach((t) => t.stop());
+          if (this.$refs.livenessPreview) this.$refs.livenessPreview.srcObject = null;
+          this.livenessStream = null;
+        }
+        this.livenessRecording = false;
+        this.mediaRecorder = null;
+        this.livenessMessage = this.livenessMessages.cancelled || '';
+        this.livenessGuideComplete = false;
+      },
+      async uploadDoc() {
+        const f = this.$refs.fileInput.files[0];
+        if (!f) return;
+        this.uploading = true;
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('kind', this.docKind);
+        if (this.reqId) fd.append('requirement_id', this.reqId);
+        try {
+          const res = await fetch('/api/documents/upload/' + this.appId + '/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': this.getCookie('csrftoken') },
+            body: fd,
+          });
+          if (res.ok) {
+            this.progressPct = Math.min(88, this.progressPct + 12);
+            this.$refs.fileInput.value = '';
+          }
+        } finally {
+          this.uploading = false;
+        }
+      },
+      async runOrchestrator() {
+        this.busy = true;
+        this.progressPct = Math.max(this.progressPct, 45);
+        this.progressHint = '{% filter escapejs %}{% trans "Running document analysis and scoring…" %}{% endfilter %}';
+        try {
+          const res = await fetch('/api/applications/' + this.appId + '/orchestrate/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.getCookie('csrftoken'),
+            },
+            body: '{}',
+          });
+          const text = await res.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch (e) {
+            data = {};
+          }
+          const errMsg = this.lwApiErrorDetail(data);
+
+          if (!res.ok) {
+            if (res.status === 403 && this.requireEmail) {
+              this.progressPct = Math.min(this.progressPct, 60);
+              alert('{% trans "Please verify your email before running the pipeline." %}');
+            } else {
+              this.progressPct = Math.min(this.progressPct, 70);
+              alert(errMsg || ('HTTP ' + res.status));
+            }
+            return;
+          }
+
+          const appData = data.application !== undefined ? data.application : data;
+          const pipeline = data.pipeline || {};
+
+          if (pipeline.blocked) {
+            this.progressPct = Math.min(this.progressPct, 55);
+            this.progressHint = '{% filter escapejs %}{% trans "Upload all required documents, then run the pipeline again." %}{% endfilter %}';
+            const labels = pipeline.missing_document_labels || pipeline.missing_documents || [];
+            const intro = '{% filter escapejs %}{% trans "The pipeline cannot run until these required documents are uploaded:" %}{% endfilter %}';
+            alert(labels.length ? (intro + '\n\n• ' + labels.join('\n• ')) : intro);
+            return;
+          }
+
+          if (pipeline.completed) {
+            this.progressPct = 100;
+            this.statusLabel = '{% trans "Completed"|escapejs %}';
+            const score = appData.eligibility_score;
+            const doneMsg = '{% filter escapejs %}{% trans "Analysis complete." %}{% endfilter %}';
+            if (score !== null && score !== undefined) {
+              alert(doneMsg + ' ' + '{% filter escapejs %}{% trans "Eligibility score:" %}{% endfilter %} ' + score);
+            } else {
+              alert(doneMsg);
+            }
+          }
+          window.location.reload();
+        } catch (e) {
+          console.warn('runOrchestrator', e);
+          this.progressPct = Math.min(this.progressPct, 70);
+          alert('{% filter escapejs %}{% trans "Could not reach the server. Check your connection and try again." %}{% endfilter %}');
+        } finally {
+          this.busy = false;
+        }
+      },
+    };
+  }
+</script>
+{% endblock %}

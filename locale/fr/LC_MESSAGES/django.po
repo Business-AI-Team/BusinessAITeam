@@ -1,0 +1,746 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: LoanWise 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Account created. Check your email for your verification code."
+msgstr ""
+"Compte créé. Consultez votre e-mail pour obtenir le code de vérification."
+
+msgid ""
+"Account created. You can log in — your email is marked verified in "
+"development."
+msgstr ""
+"Compte créé. Vous pouvez vous connecter — votre e-mail est marqué vérifié en"
+" mode développement."
+
+msgid "Admin"
+msgstr "Admin"
+
+msgid "Administration"
+msgstr "Administration"
+
+msgid "AI analysis output (development only)"
+msgstr "Sortie analyse IA (mode développement uniquement)"
+
+msgid "AI assistant"
+msgstr "Assistant IA"
+
+msgid "AI stack"
+msgstr "Stack IA"
+
+msgid "Already have an account?"
+msgstr "Déjà un compte ?"
+
+msgid "Amount must be positive."
+msgstr "Le montant doit être positif."
+
+msgid "Analysis complete."
+msgstr "Analyse terminée."
+
+msgid "Analysis results"
+msgstr "Résultats d’analyse"
+
+msgid ""
+"OK / Not OK shows whether the check passed. Similarity %% is an indicative "
+"score derived from DeepFace (not a legal proof)."
+msgstr ""
+"OK / Non OK indique si le contrôle est réussi. Le %% de similarité est un "
+"score indicatif issu de DeepFace (pas une preuve juridique)."
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Not OK"
+msgstr "Non OK"
+
+msgid "Approximate similarity with the photo on your ID: about %(pct)s%%."
+msgstr "Similarité approximative avec la photo sur votre pièce d’identité : environ %(pct)s %%."
+
+msgid "Best match uses frames from your liveness video vs the ID photo."
+msgstr "La meilleure correspondance utilise des images extraites de votre vidéo de vivacité et la photo sur la pièce d’identité."
+
+msgid "Comparison: ID photo vs uploaded selfie image."
+msgstr "Comparaison : photo d’identité vs selfie téléversé."
+
+msgid "Computed score after document and face checks: %(score)s"
+msgstr "Score calculé après analyse des documents et du visage : %(score)s"
+
+msgid ""
+"Financial base (income, amount, term): %(base)s. Pipeline adjustment "
+"(face/liveness): %(adj)s. Total: %(score)s."
+msgstr ""
+"Base financière (revenu, montant, durée) : %(base)s. Ajustement pipeline "
+"(visage/vivacité) : %(adj)s. Total : %(score)s."
+
+msgid "Total eligibility score: %(score)s"
+msgstr "Score d’éligibilité total : %(score)s"
+
+msgid ""
+"Liveness: validates the guided session before upload. The percentage applies "
+"only to similarity between your ID photo and your face (recording or "
+"selfie), not to movements."
+msgstr ""
+"Vivacité : valide la session guidée avant envoi. Le pourcentage concerne "
+"uniquement la similarité entre la photo de votre pièce d’identité et votre "
+"visage (vidéo ou selfie), pas les mouvements."
+
+msgid "Liveness (session security)"
+msgstr "Vivacité (sécurité de session)"
+
+msgid ""
+"The recording is only sent after you complete the on-screen steps. This "
+"line confirms that the liveness session is accepted for your application."
+msgstr ""
+"L’enregistrement n’est envoyé qu’après les étapes à l’écran. Cette ligne "
+"confirme que la session de vivacité est acceptée pour votre demande."
+
+msgid ""
+"The liveness session could not be validated. Please start again and follow "
+"the steps until the end."
+msgstr ""
+"La session de vivacité n’a pas pu être validée. Recommencez et suivez les "
+"étapes jusqu’au bout."
+
+msgid ""
+"No liveness video was provided — only a static photo was compared to the ID. "
+"For a full check, add a liveness recording from the guided capture."
+msgstr ""
+"Aucune vidéo de vivacité : seule une photo statique a été comparée à la "
+"pièce d’identité. Pour un contrôle complet, ajoutez un enregistrement de "
+"vivacité via le parcours guidé."
+
+msgid "Similarity: ID photo vs face (DeepFace)"
+msgstr "Similarité : photo d’identité vs visage (DeepFace)"
+
+msgid ""
+"This percentage estimates how close the face in your recording (or selfie) is "
+"to the photo on your ID. It does not measure head movements or blinks — only "
+"facial similarity."
+msgstr ""
+"Ce pourcentage estime la proximité entre le visage dans votre enregistrement "
+"(ou selfie) et la photo sur votre pièce d’identité. Il ne mesure pas les "
+"mouvements de tête ni les clignements — uniquement la ressemblance faciale."
+
+msgid "Approximate similarity: about %(pct)s%%."
+msgstr "Similarité approximative : environ %(pct)s %%."
+
+msgid ""
+"Face crops are taken from your validated liveness video and compared to the "
+"ID photo."
+msgstr ""
+"Des extraits du visage sont pris dans votre vidéo de vivacité validée et "
+"comparés à la photo de la pièce d’identité."
+
+msgid "Comparison uses your uploaded selfie image against the ID photo."
+msgstr "La comparaison utilise votre selfie téléversé et la photo sur la pièce d’identité."
+
+msgid "Could not read the ID or face image file."
+msgstr "Impossible de lire le fichier de la pièce d’identité ou du visage."
+
+msgid "yes"
+msgstr "oui"
+
+msgid "no"
+msgstr "non"
+
+msgid ""
+"Guided session: the recording only uploads after you complete the on-screen "
+"steps. Independent server re-scan — left: %(l)s, right: %(r)s, blink: %(b)s "
+"(may differ from the browser for technical reasons)."
+msgstr ""
+"Session guidée : l’envoi n’a lieu qu’après les étapes à l’écran. Relecture "
+"serveur indépendante — gauche : %(l)s, droite : %(r)s, clignement : %(b)s "
+"(peut différer du navigateur pour des raisons techniques)."
+
+msgid ""
+"(Upload did not include client session attestation — re-record with the latest "
+"app.)"
+msgstr ""
+"(L’envoi ne comportait pas l’attestation de session — réenregistrez avec la "
+"dernière version de l’application.)"
+
+msgid ""
+"Overall liveness is accepted because the guided session completed before "
+"upload."
+msgstr ""
+"La vivacité est acceptée car la session guidée s’est terminée avant l’envoi."
+
+msgid "Could not read the ID or selfie file."
+msgstr "Impossible de lire le fichier de la pièce d’identité ou du selfie."
+
+msgid "DeepFace is not installed. Add optional dependencies (see requirements-ai.txt)."
+msgstr "DeepFace n’est pas installé. Ajoutez les dépendances optionnelles (voir requirements-ai.txt)."
+
+msgid "Eligibility score (pipeline)"
+msgstr "Score d’éligibilité (pipeline)"
+
+msgid "Face match (ID vs video or selfie)"
+msgstr "Correspondance visage (ID vs vidéo ou selfie)"
+
+msgid "Face vs ID (DeepFace)"
+msgstr "Visage vs pièce d’identité (DeepFace)"
+
+msgid "Head turn left: %(s)s — Head turn right: %(t)s — Blink: %(b)s"
+msgstr "Tête à gauche : %(s)s — Tête à droite : %(t)s — Clignement : %(b)s"
+
+msgid "Liveness (movements in the video)"
+msgstr "Vivacité (mouvements dans la vidéo)"
+
+msgid "Missing"
+msgstr "Manquant"
+
+msgid "No liveness video was available; only a static selfie was used."
+msgstr "Aucune vidéo de vivacité : seul un selfie statique a été utilisé."
+
+msgid "Upload a liveness video so we can check movement and blink."
+msgstr "Téléversez une vidéo de vivacité pour vérifier les mouvements et le clignement."
+
+msgid "API-first · AI-powered"
+msgstr "API-first · propulsé par l'IA"
+
+msgid "Application not found."
+msgstr "Demande introuvable."
+
+msgid "Application workspace"
+msgstr "Espace demande"
+
+msgid "Applications & users"
+msgstr "Demandes et utilisateurs"
+
+msgid "Approved"
+msgstr "Approuvé"
+
+msgid "Assistant"
+msgstr "Assistant"
+
+msgid "Back to log in"
+msgstr "Retour à la connexion"
+
+msgid "Blink your eyes naturally once or twice."
+msgstr "Clignez des yeux une ou deux fois, naturellement."
+
+msgid "Business AI Team"
+msgstr "Équipe Business AI"
+
+msgid "Business loan"
+msgstr "Prêt professionnel"
+
+msgid "Camera recording is not supported in this browser."
+msgstr "L’enregistrement caméra n’est pas pris en charge par ce navigateur."
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid ""
+"Click Start: the AI guides you in real time. When the sequence is validated,"
+" recording stops automatically and the video is sent. Compare it with your "
+"ID by running the AI pipeline."
+msgstr ""
+"Cliquez sur Démarrer : l’IA vous guide en temps réel. Quand la séquence est "
+"validée, l’enregistrement s’arrête et la vidéo est envoyée automatiquement. "
+"Lancez le pipeline IA pour la comparer à votre pièce d’identité."
+
+msgid "Complete the chat steps, upload documents, then run the AI pipeline."
+msgstr ""
+"Terminez le chat, téléversez les documents, puis lancez le pipeline IA."
+
+msgid "Completed"
+msgstr "Terminé"
+
+msgid "Could not access the camera."
+msgstr "Impossible d’accéder à la caméra."
+
+msgid "Could not create application. Ensure you are logged in."
+msgstr "Impossible de créer la demande. Vérifiez que vous êtes connecté."
+
+msgid "Could not reach the server. Check your connection and try again."
+msgstr "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
+
+msgid "Create your account"
+msgstr "Créer votre compte"
+
+msgid "Creating…"
+msgstr "Création…"
+
+msgid "Dark"
+msgstr "Sombre"
+
+msgid "Dashboard"
+msgstr "Tableau de bord"
+
+msgid ""
+"Development: the email is printed in the runserver terminal. Your "
+"verification code is %(code)s. You can also open: %(url)s"
+msgstr ""
+"Développement : l'e-mail est affiché dans le terminal runserver. Votre code "
+"de vérification : %(code)s. Vous pouvez aussi ouvrir : %(url)s"
+
+msgid ""
+"Development: verified email is not required to run the pipeline. Configure "
+"SMTP and set LOANWISE_REQUIRE_EMAIL_VERIFICATION=true for production-like "
+"behaviour."
+msgstr ""
+"Développement : l'e-mail vérifié n'est pas exigé pour le pipeline. "
+"Configurez un SMTP et LOANWISE_REQUIRE_EMAIL_VERIFICATION=true pour un "
+"comportement proche de la production."
+
+msgid "document requirement"
+msgstr "exigence documentaire"
+
+msgid "document requirements"
+msgstr "exigences documentaires"
+
+msgid "Documents"
+msgstr "Documents"
+
+msgid "Download PDF"
+msgstr "Télécharger le PDF"
+
+msgid "Draft"
+msgstr "Brouillon"
+
+msgid "Eligibility preview"
+msgstr "Aperçu d'éligibilité"
+
+msgid "Eligibility score:"
+msgstr "Score d'éligibilité :"
+
+msgid "Email"
+msgstr "E-mail"
+
+msgid "email address"
+msgstr "adresse e-mail"
+
+msgid ""
+"Email verification is required to run the AI pipeline. If you did not "
+"receive an email, check the terminal where runserver is running (console "
+"email backend), or ask an administrator to mark your account as verified."
+msgstr ""
+"Une e-mail vérifiée est requise pour lancer le pipeline IA. Si vous n'avez "
+"rien reçu, regardez le terminal où tourne runserver (backend e-mail "
+"console), ou demandez à un administrateur de valider votre compte."
+
+msgid "English"
+msgstr "Anglais"
+
+msgid "Enter the six-digit code we sent to your inbox after registration."
+msgstr ""
+"Saisissez le code à six chiffres envoyé dans votre boîte après "
+"l'inscription."
+
+msgid "Enter verification code"
+msgstr "Saisir le code de vérification"
+
+msgid "Explore API"
+msgstr "Explorer l'API"
+
+msgid "Face selfie"
+msgstr "Selfie visage"
+
+msgid "face_selfie"
+msgstr "selfie visage"
+
+msgid "Figures are indicative for the hackathon demo."
+msgstr "Chiffres indicatifs pour la démo hackathon."
+
+msgid "Files are hashed (SHA-256) and removed after analysis."
+msgstr "Fichiers hachés (SHA-256) puis supprimés après analyse."
+
+msgid "First name"
+msgstr "Prénom"
+
+msgid ""
+"Follow the live instructions below: face visible, turn left, turn right, "
+"then blink. Then stop and upload. The recording is compared to your ID when "
+"you run the pipeline."
+msgstr ""
+"Suivez les instructions en direct ci-dessous : visage visible, tourner à "
+"gauche, à droite, puis cligner des yeux. Ensuite arrêtez et envoyez. La "
+"vidéo est comparée à votre pièce d’identité lors du pipeline."
+
+msgid "FR · EN"
+msgstr "FR · EN"
+
+msgid "French"
+msgstr "Français"
+
+msgid ""
+"Full JSON from face/liveness checks and document analysis — visible when "
+"DEBUG is true."
+msgstr ""
+"JSON complet des vérifications visage / vivacité et des analyses "
+"documentaires — visible si DEBUG est activé."
+
+msgid "generic"
+msgstr "générique"
+
+msgid "Generic"
+msgstr "Générique"
+
+msgid "Get started"
+msgstr "Commencer"
+
+msgid "Home"
+msgstr "Accueil"
+
+msgid "identity"
+msgstr "identité"
+
+msgid "Identity"
+msgstr "Identité"
+
+msgid "Important dates"
+msgstr "Dates importantes"
+
+msgid "In progress"
+msgstr "En cours"
+
+msgid "In progress…"
+msgstr "En cours…"
+
+msgid "Income proof"
+msgstr "Justificatif de revenus"
+
+msgid "Invalid email or password."
+msgstr "E-mail ou mot de passe invalide."
+
+msgid ""
+"Invalid email or verification code. Check the code in your email and try "
+"again."
+msgstr ""
+"E-mail ou code de vérification invalide. Vérifiez le code reçu par e-mail et"
+" réessayez."
+
+msgid "LangGraph · Florence-2"
+msgstr "LangGraph · Florence-2"
+
+msgid "Language"
+msgstr "Langue"
+
+msgid "Language for this application (UI + AI agents)."
+msgstr "Langue pour cette demande (interface + agents IA)."
+
+msgid "Languages"
+msgstr "Langues"
+
+msgid "Last name"
+msgstr "Nom"
+
+msgid "Light"
+msgstr "Clair"
+
+msgid "List of loan type codes, e.g. [\"personal\", \"business\"]."
+msgstr "Liste de codes de type de prêt, ex. [\"personal\", \"business\"]."
+
+msgid "Live"
+msgstr "En direct"
+
+msgid "Liveness cancelled."
+msgstr "Vérification vivacité annulée."
+
+msgid "Liveness sequence complete — you can stop recording and upload."
+msgstr ""
+"Séquence de vivacité terminée — vous pouvez arrêter l’enregistrement et "
+"envoyer la vidéo."
+
+msgid "Liveness video"
+msgstr "Vidéo de vivacité"
+
+msgid "liveness_video"
+msgstr "liveness_video"
+
+msgid ""
+"LoanWise guides applicants with a multilingual AI assistant, secure document"
+" analysis, and clear ROI insights — built for modern fintech teams."
+msgstr ""
+"LoanWise accompagne les candidats avec un assistant IA multilingue, une "
+"analyse documentaire sécurisée et une vision ROI claire — pensé pour les "
+"équipes fintech modernes."
+
+msgid "LoanWise — users, applications, tokens"
+msgstr "LoanWise — utilisateurs, demandes, jetons"
+
+msgid "LoanWise admin"
+msgstr "Admin LoanWise"
+
+msgid "LoanWise administration"
+msgstr "Administration LoanWise"
+
+msgid "Log in"
+msgstr "Connexion"
+
+msgid "Log out"
+msgstr "Déconnexion"
+
+msgid "Loading face detection model…"
+msgstr "Chargement du modèle de détection du visage…"
+
+msgid ""
+"Look straight at the camera. Next, we will ask you to turn your head left, "
+"then right, then blink."
+msgstr ""
+"Regardez droit dans la caméra. Ensuite, nous vous demanderons de tourner la "
+"tête à gauche, puis à droite, puis de cligner des yeux."
+
+msgid "Mortgage"
+msgstr "Immobilier"
+
+msgid "New application"
+msgstr "Nouvelle demande"
+
+msgid "No account?"
+msgstr "Pas encore de compte ?"
+
+msgid "No applications yet. Start your first check."
+msgstr "Aucune demande pour l'instant. Lancez votre première vérification."
+
+msgid "No face detected — position yourself in front of the camera."
+msgstr "Aucun visage détecté — placez-vous face à la caméra."
+
+msgid "No video data to upload."
+msgstr "Aucune donnée vidéo à envoyer."
+
+msgid "Now turn your head slowly to the right (your right)."
+msgstr "Maintenant tournez lentement la tête à droite (votre droite)."
+
+msgid "Open admin"
+msgstr "Ouvrir l'admin"
+
+msgid "Open dashboard"
+msgstr "Ouvrir le tableau de bord"
+
+msgid ""
+"Open the camera and record a short clip. Slowly turn your head left, then "
+"right (about 10–20 seconds). This is compared to your ID photo when you run "
+"the pipeline."
+msgstr ""
+"Ouvrez la caméra et enregistrez une courte séquence. Tournez lentement la "
+"tête à gauche puis à droite (environ 10 à 20 secondes). La vidéo est "
+"comparée à la photo d’identité lors du lancement du pipeline."
+
+msgid "Password"
+msgstr "Mot de passe"
+
+msgid "Permissions"
+msgstr "Permissions"
+
+msgid "Personal info"
+msgstr "Informations personnelles"
+
+msgid "Personal loan"
+msgstr "Prêt personnel"
+
+msgid "Pipeline progress"
+msgstr "Progression du pipeline"
+
+msgid "Please correct the errors below."
+msgstr "Veuillez corriger les erreurs ci-dessous."
+
+msgid "Please enter your email and the verification code."
+msgstr "Veuillez saisir votre e-mail et le code de vérification."
+
+msgid "Please verify your email before running the pipeline."
+msgstr "Vérifiez votre e-mail avant de lancer le pipeline."
+
+msgid "Preferences"
+msgstr "Préférences"
+
+msgid "Preferred language"
+msgstr "Langue préférée"
+
+msgid "Principal"
+msgstr "Capital"
+
+msgid "Processing…"
+msgstr "Traitement…"
+
+msgid ""
+"Real-time analysis unavailable (MediaPipe did not load). Allow scripts from "
+"the CDN or try another browser."
+msgstr ""
+"Analyse temps réel indisponible (MediaPipe non chargé). Autorisez les "
+"scripts du CDN ou essayez un autre navigateur."
+
+msgid ""
+"Real-time face guidance unavailable (MediaPipe could not load). You can "
+"still record."
+msgstr ""
+"Guidage visage en temps réel indisponible (MediaPipe non chargé). Vous "
+"pouvez quand même enregistrer."
+
+msgid "Recording…"
+msgstr "Enregistrement…"
+
+msgid "Rejected"
+msgstr "Refusé"
+
+msgid "Requirement"
+msgstr "Exigence"
+
+msgid "ROI"
+msgstr "ROI"
+
+msgid "ROI & impact"
+msgstr "ROI & impact"
+
+msgid "Run AI pipeline"
+msgstr "Lancer le pipeline IA"
+
+msgid "Running document analysis and scoring…"
+msgstr "Analyse des documents et calcul du score…"
+
+msgid "The pipeline cannot run until these required documents are uploaded:"
+msgstr "Le pipeline ne peut pas s’exécuter tant que ces documents obligatoires ne sont pas téléversés :"
+
+msgid "Upload all required documents, then run the pipeline again."
+msgstr "Téléversez tous les documents requis, puis relancez le pipeline."
+
+msgid "Score"
+msgstr "Score"
+
+msgid "Send"
+msgstr "Envoyer"
+
+msgid "Sending the video to the server…"
+msgstr "Envoi de la vidéo au serveur…"
+
+msgid "Sending video…"
+msgstr "Envoi de la vidéo…"
+
+msgid "Sequence OK — you can stop and upload."
+msgstr "Séquence OK — vous pouvez arrêter et envoyer."
+
+msgid "Sequence validated — closing the camera and sending your video…"
+msgstr "Séquence validée — fermeture de la caméra et envoi de la vidéo…"
+
+msgid "SHA-256 + auto-delete"
+msgstr "SHA-256 + suppression auto"
+
+msgid "Sign in to continue your loan journey."
+msgstr "Connectez-vous pour poursuivre votre parcours."
+
+msgid "Sign up"
+msgstr "S'inscrire"
+
+msgid "Smart Loan Eligibility Checker"
+msgstr "Vérificateur d'éligibilité crédit intelligent"
+
+msgid ""
+"Staff: use the administration panel to manage users, loan applications, and "
+"API tokens."
+msgstr ""
+"Staff : utilisez l'espace d'administration pour gérer les utilisateurs, les "
+"demandes de prêt et les jetons API."
+
+msgid "Start camera & record"
+msgstr "Démarrer la caméra et enregistrer"
+
+msgid "Start liveness check"
+msgstr "Démarrer la vérification vivacité"
+
+msgid "Step-by-step guidance in your language."
+msgstr "Accompagnement pas à pas dans votre langue."
+
+msgid "Stop & upload video"
+msgstr "Arrêter et envoyer la vidéo"
+
+msgid "Switch to dark mode"
+msgstr "Passer en mode sombre"
+
+msgid "Switch to light mode"
+msgstr "Passer en mode clair"
+
+msgid "System"
+msgstr "Système"
+
+msgid "The code must contain exactly six digits."
+msgstr "Le code doit comporter exactement six chiffres."
+
+msgid "This email was already verified. You are signed in."
+msgstr "Cette adresse e-mail était déjà vérifiée. Vous êtes connecté."
+
+msgid "Track eligibility, documents, and AI-assisted progress."
+msgstr ""
+"Suivez l'éligibilité, les documents et la progression assistée par l'IA."
+
+msgid "Turn your head slowly to the left (your left)."
+msgstr "Tournez lentement la tête à gauche (votre gauche)."
+
+msgid "Type your message…"
+msgstr "Votre message…"
+
+msgid "Under review"
+msgstr "En analyse"
+
+msgid "Upload"
+msgstr "Envoyer"
+
+msgid "Uploading video…"
+msgstr "Envoi de la vidéo…"
+
+msgid "Uploading…"
+msgstr "Envoi…"
+
+msgid "user"
+msgstr "utilisateur"
+
+msgid "User"
+msgstr "Utilisateur"
+
+msgid "Username"
+msgstr "Nom d'utilisateur"
+
+msgid "users"
+msgstr "utilisateurs"
+
+msgid "Verification code"
+msgstr "Code de vérification"
+
+msgid "Verify"
+msgstr "Vérifier"
+
+msgid "Verify your email"
+msgstr "Vérifier votre e-mail"
+
+msgid "Video received. Run the AI pipeline to compare with your ID."
+msgstr ""
+"Vidéo reçue. Lancez le pipeline IA pour la comparer à votre pièce "
+"d’identité."
+
+msgid ""
+"Video received. You can run the AI pipeline to compare it with your ID."
+msgstr ""
+"Vidéo reçue. Vous pouvez lancer le pipeline IA pour la comparer à votre "
+"pièce d’identité."
+
+msgid "Video upload failed."
+msgstr "Échec de l’envoi de la vidéo."
+
+msgid ""
+"We could not send the email. Enter the code from the server log or ask an "
+"administrator."
+msgstr ""
+"Impossible d'envoyer l'e-mail. Saisissez le code affiché dans les journaux "
+"du serveur ou demandez à un administrateur."
+
+msgid "We will send a six-digit verification code to your email."
+msgstr "Nous enverrons un code à six chiffres à votre adresse e-mail."
+
+msgid "Welcome back"
+msgstr "Bon retour"
+
+msgid "Your applications"
+msgstr "Vos demandes"
+
+msgid "Your email is verified. Welcome!"
+msgstr "Votre e-mail est vérifié. Bienvenue !"

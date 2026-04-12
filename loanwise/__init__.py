@@ -1,0 +1,1 @@
+# LoanWise Django project package.

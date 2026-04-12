@@ -1,0 +1,29 @@
+# Optional AI stack (large downloads). Install after requirements.txt:
+#   pip install -r requirements.txt -r requirements-ai.txt
+
+# Liveness (OpenCV + MediaPipe face mesh + Haar); numpy is pulled by opencv / mediapipe
+opencv-python-headless>=4.8
+mediapipe>=0.10.9
+numpy>=1.24
+
+langchain>=0.2
+langchain-core>=0.2
+langchain-openai>=0.1
+langchain-community>=0.2
+langgraph>=0.2
+openai>=1.0
+
+deepface>=0.0.93
+tf-keras>=2.0
+
+torch>=2.0
+torchvision>=0.15
+transformers>=4.40
+accelerate>=0.30
+
+# RAG: admin PDFs / images → eligibility rules (Chroma + embeddings + extraction)
+chromadb>=0.4
+sentence-transformers>=2.6
+pypdf>=4.0
+Pillow>=10.0
+pytesseract>=0.3.10

@@ -1,0 +1,64 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<section class="grid gap-12 lg:grid-cols-2 lg:items-center">
+  <div class="animate-fade-in-up space-y-6">
+    <p class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sky-800 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
+      {% trans "API-first · AI-powered" %}
+    </p>
+    <h1 class="text-4xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
+      {% trans "Smart Loan Eligibility Checker" %}
+    </h1>
+    <p class="max-w-xl text-lg text-slate-600 dark:text-slate-300">
+      {% trans "LoanWise guides applicants with a multilingual AI assistant, secure document analysis, and clear ROI insights — built for modern fintech teams." %}
+    </p>
+    <div class="flex flex-wrap gap-3">
+      {% if user.is_authenticated %}
+      <a href="{% url 'dashboard' %}" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-500">
+        {% trans "Open dashboard" %}
+      </a>
+      {% else %}
+      <a href="{% url 'register_page' %}" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-500">
+        {% trans "Get started" %}
+      </a>
+      <a href="/api/docs/swagger/" target="_blank" rel="noopener" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        {% trans "Explore API" %}
+      </a>
+      {% endif %}
+    </div>
+    <dl class="grid grid-cols-2 gap-4 pt-4 sm:grid-cols-3">
+      <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+        <dt class="text-xs text-slate-500">{% trans "Documents" %}</dt>
+        <dd class="text-lg font-semibold">{% trans "SHA-256 + auto-delete" %}</dd>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+        <dt class="text-xs text-slate-500">{% trans "AI stack" %}</dt>
+        <dd class="text-lg font-semibold">{% trans "LangGraph · Florence-2" %}</dd>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+        <dt class="text-xs text-slate-500">{% trans "Languages" %}</dt>
+        <dd class="text-lg font-semibold">{% trans "FR · EN" %}</dd>
+      </div>
+    </dl>
+  </div>
+  <div class="animate-fade-in-up animate-delay-1 relative">
+    <div class="absolute -inset-4 rounded-3xl bg-gradient-to-tr from-sky-500/20 to-indigo-500/20 blur-2xl"></div>
+    <div class="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white/80 p-6 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+      <div class="mb-4 flex items-center justify-between">
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">{% trans "Eligibility preview" %}</span>
+        <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">{% trans "Live" %}</span>
+      </div>
+      <div class="space-y-3">
+        <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+          <div class="h-full w-4/5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-700"></div>
+        </div>
+        <div class="grid gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <div class="flex justify-between"><span>{% trans "Score" %}</span><span class="font-semibold text-sky-600 dark:text-sky-400">82 / 100</span></div>
+          <div class="flex justify-between"><span>{% trans "ROI" %}</span><span class="font-semibold">+14.2%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
