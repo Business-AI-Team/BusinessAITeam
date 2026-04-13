@@ -27,6 +27,7 @@ urlpatterns = [
     path("bo/", web_views.backoffice_dashboard, name="backoffice_dashboard"),
     path("bo/requests/", web_views.backoffice_loan_requests, name="backoffice_loan_requests"),
     path("bo/requests/<int:pk>/", web_views.backoffice_loan_request_detail, name="backoffice_loan_request_detail"),
+    path("conditions/", web_views.backoffice_eligibility_conditions, name="backoffice_eligibility_conditions"),
     path("bo/requirements/", web_views.backoffice_document_requirements, name="backoffice_document_requirements"),
     path("bo/agents/", web_views.backoffice_agents, name="backoffice_agents"),
 ]

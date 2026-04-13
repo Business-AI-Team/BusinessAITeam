@@ -4,7 +4,7 @@ Server-rendered pages — Customer and Back-Office workspaces.
 Routing logic:
   - Unauthenticated → login / register (Customer only)
   - account_type = customer → customer_dashboard, loan_request_new, loan_request_detail, notifications
-  - account_type = backoffice → backoffice_dashboard, backoffice_loan_requests, backoffice_document_requirements
+  - account_type = backoffice → backoffice_dashboard, backoffice_loan_requests, backoffice_eligibility_conditions, backoffice_document_requirements
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 
@@ -32,10 +33,16 @@ from core.models import (
     DocumentRequirement,
     DocumentType,
 
+    EligibilityCondition,
     LoanRequest,
     LoanRequestStatus,
     LoanType,
     Notification,
+)
+from core.rag_eligibility import (
+    delete_eligibility_source_index,
+    extract_text_from_file,
+    index_eligibility_source,
 )
 
 Account = get_user_model()
@@ -463,6 +470,69 @@ def backoffice_loan_request_detail(request: HttpRequest, pk: int) -> HttpRespons
         "loan_request": lr,
         "documents": documents,
         "status_choices": LoanRequestStatus.choices,
+    })
+
+
+def _sync_eligibility_condition_index(condition: EligibilityCondition) -> None:
+    """Extract text, refresh Chroma / keyword index (same behaviour as Django admin)."""
+    if condition.file:
+        extracted = extract_text_from_file(condition.file.path)
+        EligibilityCondition.objects.filter(pk=condition.pk).update(extracted_text=extracted)
+        condition.refresh_from_db()
+    full = condition.searchable_blob()
+    if condition.is_active and full.strip():
+        index_eligibility_source(condition.pk, condition.title or "", full)
+        EligibilityCondition.objects.filter(pk=condition.pk).update(last_indexed_at=timezone.now())
+    else:
+        delete_eligibility_source_index(condition.pk)
+
+
+def _uploaded_file_is_pdf(f) -> bool:
+    name = (getattr(f, "name", "") or "").lower()
+    if not name.endswith(".pdf"):
+        return False
+    ct = (getattr(f, "content_type", "") or "").lower()
+    if not ct:
+        return True
+    return "pdf" in ct or ct == "application/octet-stream"
+
+
+@_require_backoffice
+@require_http_methods(["GET", "POST"])
+def backoffice_eligibility_conditions(request: HttpRequest) -> HttpResponse:
+    """Upload PDF policy documents that drive eligibility guidance (RAG)."""
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "upload":
+            f = request.FILES.get("file")
+            if not f:
+                messages.error(request, _("Please choose a PDF file to upload."))
+            elif not _uploaded_file_is_pdf(f):
+                messages.error(request, _("Only PDF files are accepted."))
+            else:
+                cond = EligibilityCondition.objects.create(
+                    file=f,
+                    is_active=True,
+                )
+                _sync_eligibility_condition_index(cond)
+                messages.success(request, _("Criteria document added and indexed."))
+
+        elif action == "delete":
+            cid = request.POST.get("condition_id")
+            cond = EligibilityCondition.objects.filter(pk=cid).first()
+            if cond:
+                delete_eligibility_source_index(cond.pk)
+                if cond.file:
+                    cond.file.delete(save=False)
+                cond.delete()
+                messages.success(request, _("Criteria document deleted."))
+
+        return redirect("backoffice_eligibility_conditions")
+
+    conditions = EligibilityCondition.objects.all().order_by("-created_at")
+    return render(request, "loanwise/backoffice/eligibility_conditions.html", {
+        "conditions": conditions,
     })
 
 
