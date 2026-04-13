@@ -41,18 +41,17 @@
   </div>
 
   {# Filters #}
-  <form method="get" action=""
-        class="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+  <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
     <div class="flex flex-wrap items-end gap-3">
 
       {# Status #}
       <div class="flex flex-col gap-1">
         <label for="bo-filter-status" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Status" %}</label>
-        <select id="bo-filter-status" name="status"
+        <select id="bo-filter-status"
                 class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
           <option value="">{% trans "All" %}</option>
           {% for val, label in status_choices %}
-          <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
+          <option value="{{ val }}">{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -60,19 +59,18 @@
       {# Customer #}
       <div class="flex flex-col gap-1">
         <label for="bo-filter-customer" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Customer" %}</label>
-        <input id="bo-filter-customer" type="text" name="customer" value="{{ f_customer }}"
-               placeholder="{% trans 'Name or email…' %}"
+        <input id="bo-filter-customer" type="text" placeholder="{% trans 'Name or email…' %}"
                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:placeholder-slate-500">
       </div>
 
       {# Loan type #}
       <div class="flex flex-col gap-1">
         <label for="bo-filter-type" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Type" %}</label>
-        <select id="bo-filter-type" name="loan_type"
+        <select id="bo-filter-type"
                 class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
           <option value="">{% trans "All" %}</option>
           {% for val, label in type_choices %}
-          <option value="{{ val }}" {% if f_type == val %}selected{% endif %}>{{ label }}</option>
+          <option value="{{ val }}">{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -80,41 +78,33 @@
       {# Date from #}
       <div class="flex flex-col gap-1">
         <label for="bo-filter-date-from" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "From" %}</label>
-        <input id="bo-filter-date-from" type="date" name="date_from" value="{{ f_date_from }}"
+        <input id="bo-filter-date-from" type="date"
                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
       </div>
 
       {# Date to #}
       <div class="flex flex-col gap-1">
         <label for="bo-filter-date-to" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "To" %}</label>
-        <input id="bo-filter-date-to" type="date" name="date_to" value="{{ f_date_to }}"
+        <input id="bo-filter-date-to" type="date"
                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
       </div>
 
-      {# Apply #}
-      <button type="submit"
-              class="rounded-lg bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-sky-500">
-        {% trans "Apply" %}
+      {# Reset #}
+      <button id="bo-filter-reset"
+              class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+        ↺ {% trans "Reset" %}
       </button>
 
-      {# Reset #}
-      {% if f_status or f_customer or f_type or f_date_from or f_date_to %}
-      <a href="?"
-         class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-        ↺ {% trans "Reset" %}
-      </a>
-      {% endif %}
-
     </div>
-  </form>
+  </div>
 
   {# Requests table #}
   <div>
     <div class="mb-3 flex items-center justify-between">
       <h2 class="font-semibold text-slate-900 dark:text-white">
         {% trans "Loan requests" %}
-        <span class="ml-2 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-          {{ filtered_count }}
+        <span id="bo-visible-count" class="ml-2 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          {{ recent_requests|length }}
         </span>
       </h2>
     </div>
@@ -122,7 +112,7 @@
     {% if recent_requests %}
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80">
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+        <table id="bo-loans-table" class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
           <thead class="bg-slate-50 dark:bg-slate-800/60">
             <tr>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Reference" %}</th>
@@ -136,7 +126,11 @@
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
             {% for lr in recent_requests %}
-            <tr class="group transition hover:bg-sky-50/40 dark:hover:bg-sky-900/10">
+            <tr class="group transition hover:bg-sky-50/40 dark:hover:bg-sky-900/10"
+                data-status="{{ lr.status }}"
+                data-type="{{ lr.loan_type }}"
+                data-date="{{ lr.creation_date|date:'Y-m-d' }}"
+                data-customer="{% if lr.customer %}{{ lr.customer.first_name }} {{ lr.customer.last_name }} {{ lr.customer.email }}{% else %}{{ lr.account.email }}{% endif %}">
               <td class="whitespace-nowrap px-4 py-3">
                 <span class="font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">{{ lr.reference }}</span>
               </td>
@@ -167,19 +161,76 @@
           </tbody>
         </table>
       </div>
-      {% if filtered_count > 50 %}
-      <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
-        {% trans "Showing first 50 of" %} {{ filtered_count }} {% trans "results. Use filters to narrow down." %}
+      <div id="bo-no-results" class="hidden border-t border-slate-100 px-5 py-8 text-center dark:border-slate-800">
+        <p class="text-2xl">🔍</p>
+        <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">{% trans "No requests match the current filters." %}</p>
       </div>
-      {% endif %}
     </div>
     {% else %}
     <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
       <p class="text-3xl">🔍</p>
       <p class="mt-3 font-medium text-slate-600 dark:text-slate-300">{% trans "No requests match the current filters." %}</p>
-      <a href="?" class="mt-3 inline-block text-sm text-sky-600 hover:underline dark:text-sky-400">{% trans "Clear filters" %}</a>
     </div>
     {% endif %}
   </div>
 </div>
+
+<script>
+  (function () {
+    const selStatus   = document.getElementById('bo-filter-status');
+    const inputCust   = document.getElementById('bo-filter-customer');
+    const selType     = document.getElementById('bo-filter-type');
+    const inputFrom   = document.getElementById('bo-filter-date-from');
+    const inputTo     = document.getElementById('bo-filter-date-to');
+    const btnReset    = document.getElementById('bo-filter-reset');
+    const table       = document.getElementById('bo-loans-table');
+    const countEl     = document.getElementById('bo-visible-count');
+    const noResults   = document.getElementById('bo-no-results');
+
+    if (!table) return;
+
+    function applyFilters() {
+      const status   = selStatus.value;
+      const customer = inputCust.value.trim().toLowerCase();
+      const type     = selType.value;
+      const from     = inputFrom.value ? new Date(inputFrom.value) : null;
+      const to       = inputTo.value   ? new Date(inputTo.value)   : null;
+      if (to) to.setHours(23, 59, 59, 999);
+
+      const rows = table.querySelectorAll('tbody tr');
+      let visible = 0;
+
+      rows.forEach(function (row) {
+        const matchStatus   = !status   || row.dataset.status === status;
+        const matchType     = !type     || row.dataset.type   === type;
+        const matchCustomer = !customer || (row.dataset.customer || '').toLowerCase().includes(customer);
+        const rowDate       = row.dataset.date ? new Date(row.dataset.date) : null;
+        const matchFrom     = !from || (rowDate && rowDate >= from);
+        const matchTo       = !to   || (rowDate && rowDate <= to);
+
+        const show = matchStatus && matchType && matchCustomer && matchFrom && matchTo;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+
+      if (countEl) countEl.textContent = visible;
+      if (noResults) noResults.classList.toggle('hidden', visible > 0);
+    }
+
+    selStatus.addEventListener('change', applyFilters);
+    inputCust.addEventListener('input',  applyFilters);
+    selType.addEventListener('change',   applyFilters);
+    inputFrom.addEventListener('change', applyFilters);
+    inputTo.addEventListener('change',   applyFilters);
+
+    btnReset.addEventListener('click', function () {
+      selStatus.value = '';
+      inputCust.value = '';
+      selType.value   = '';
+      inputFrom.value = '';
+      inputTo.value   = '';
+      applyFilters();
+    });
+  })();
+</script>
 {% endblock %}
