@@ -21,7 +21,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.document_requirement_service import label_for, seed_default_requirements
+from core.document_requirement_service import all_requirements
 from core.email_verification_service import send_registration_verification_email, verify_email_with_code, verify_email_with_token
 from core.loan_chatbot_agent import run_chat_turn
 from core.loan_orchestrator_agent import run_orchestration
@@ -202,10 +202,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         missing_codes: list[str] = []
         if step_name == "blocked":
             missing_codes = list(last.get("detail", {}).get("missing_documents") or [])
-        missing_labels: list[str] = []
-        for code in missing_codes:
-            req = DocumentRequirement.objects.filter(code=code).first()
-            missing_labels.append(label_for(req, lang) if req else code)
+        missing_labels: list[str] = missing_codes
 
         pipeline = {
             "completed": step_name == "complete",
@@ -248,8 +245,6 @@ class DocumentUploadView(APIView):
         req = None
         if requirement_id:
             req = DocumentRequirement.objects.filter(pk=requirement_id).first()
-        if (kind == "liveness_video" or kind == "face_selfie") and req is None:
-            req = DocumentRequirement.objects.filter(code="face_selfie", active=True).first()
         if kind == "liveness_video":
             ext = Path(file.name).suffix.lower()
             if ext not in (".webm", ".mp4", ".mov", ".mkv", ".avi"):
@@ -284,7 +279,7 @@ class DocumentUploadView(APIView):
         if kind == "liveness_video":
             doc.document_type = DocumentType.LIVENESS_VIDEO
             doc.save(update_fields=["document_type"])
-        elif kind == "face_selfie" or (req and req.code == "face_selfie"):
+        elif kind == "face_selfie":
             doc.document_type = DocumentType.FACE_SELFIE
             doc.save(update_fields=["document_type"])
         return Response(DocumentSerializer(doc).data, status=201)
@@ -295,10 +290,8 @@ class DocumentRequirementListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        seed_default_requirements()
-        lang = request.query_params.get("lang") or getattr(request.user, "preferred_language", "fr")
-        qs = DocumentRequirement.objects.filter(active=True).order_by("sort_order")
-        ser = DocumentRequirementSerializer(qs, many=True, context={"language": lang})
+        qs = all_requirements()
+        ser = DocumentRequirementSerializer(qs, many=True)
         return Response(ser.data)
 
 
@@ -317,5 +310,4 @@ class SeedDemoView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        n = seed_default_requirements()
-        return Response({"created": n})
+        return Response({"detail": "Seed not applicable. Manage requirements via Back-Office."})

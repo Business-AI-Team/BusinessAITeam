@@ -137,9 +137,9 @@ class DocumentAdmin(admin.ModelAdmin):
 
 @admin.register(DocumentRequirement)
 class DocumentRequirementAdmin(admin.ModelAdmin):
-    list_display = ("code", "label_en", "is_required", "sort_order", "active")
-    list_filter = ("active", "is_required")
-    search_fields = ("code", "label_en", "label_fr")
+    list_display = ("name", "is_mandatory", "created_at")
+    list_filter = ("is_mandatory",)
+    search_fields = ("name",)
 
 
 @admin.register(ChatMessage)

@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 
-from core.document_requirement_service import seed_default_requirements
+from core.document_requirement_service import all_requirements
 from core.models import (
     Account,
     AccountType,
@@ -32,6 +32,7 @@ from core.models import (
     Document,
     DocumentRequirement,
     DocumentType,
+
     EligibilityCondition,
     LoanRequest,
     LoanRequestStatus,
@@ -189,7 +190,6 @@ def dashboard(request):
 
 @_require_customer
 def customer_dashboard(request: HttpRequest) -> HttpResponse:
-    seed_default_requirements()
     loan_requests = LoanRequest.objects.filter(account=request.user).order_by("-creation_date")
     # Unread notifications count
     unread_count = 0
@@ -209,8 +209,7 @@ def customer_dashboard(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def loan_request_new(request: HttpRequest) -> HttpResponse:
     """Create a new LoanRequest with initial documents."""
-    seed_default_requirements()
-    requirements = DocumentRequirement.objects.filter(active=True).order_by("sort_order")
+    requirements = all_requirements()
 
     if request.method == "POST":
         loan_type = request.POST.get("loan_type", LoanType.PERSONAL)
@@ -303,7 +302,7 @@ def loan_request_new(request: HttpRequest) -> HttpResponse:
 def loan_request_detail(request: HttpRequest, pk: int) -> HttpResponse:
     lr = get_object_or_404(LoanRequest, pk=pk, account=request.user)
     documents = lr.documents.all().order_by("-created_at")
-    requirements = DocumentRequirement.objects.filter(active=True).order_by("sort_order")
+    requirements = all_requirements()
 
     # Handle additional document upload
     if request.method == "POST":
@@ -540,44 +539,18 @@ def backoffice_eligibility_conditions(request: HttpRequest) -> HttpResponse:
 @_require_backoffice
 @require_http_methods(["GET", "POST"])
 def backoffice_document_requirements(request: HttpRequest) -> HttpResponse:
-    """Manage DocumentRequirement records."""
+    """Manage DocumentRequirement records: create and delete only."""
     if request.method == "POST":
         action = request.POST.get("action")
 
         if action == "create":
-            code = request.POST.get("code", "").strip().lower().replace(" ", "_")
-            label_fr = request.POST.get("label_fr", "").strip()
-            label_en = request.POST.get("label_en", "").strip()
-            desc_fr = request.POST.get("description_fr", "").strip()
-            desc_en = request.POST.get("description_en", "").strip()
-            loan_types = request.POST.getlist("loan_types")
-            is_required = request.POST.get("is_required") == "on"
-            sort_order = int(request.POST.get("sort_order", 0) or 0)
-            if code and label_fr:
-                DocumentRequirement.objects.update_or_create(
-                    code=code,
-                    defaults={
-                        "label_fr": label_fr,
-                        "label_en": label_en or label_fr,
-                        "description_fr": desc_fr,
-                        "description_en": desc_en,
-                        "applies_to_loan_types": loan_types,
-                        "is_required": is_required,
-                        "sort_order": sort_order,
-                        "active": True,
-                    },
-                )
-                messages.success(request, _("Requirement saved."))
+            name = request.POST.get("name", "").strip()
+            is_mandatory = request.POST.get("is_mandatory") == "on"
+            if name:
+                DocumentRequirement.objects.create(name=name, is_mandatory=is_mandatory)
+                messages.success(request, _("Requirement added."))
             else:
-                messages.error(request, _("Code and French label are required."))
-
-        elif action == "toggle":
-            req_id = request.POST.get("req_id")
-            req = DocumentRequirement.objects.filter(pk=req_id).first()
-            if req:
-                req.active = not req.active
-                req.save(update_fields=["active"])
-                messages.success(request, _("Requirement updated."))
+                messages.error(request, _("Name is required."))
 
         elif action == "delete":
             req_id = request.POST.get("req_id")
@@ -586,10 +559,9 @@ def backoffice_document_requirements(request: HttpRequest) -> HttpResponse:
 
         return redirect("backoffice_document_requirements")
 
-    requirements = DocumentRequirement.objects.all().order_by("sort_order", "code")
+    requirements = DocumentRequirement.objects.order_by("name")
     return render(request, "loanwise/backoffice/document_requirements.html", {
         "requirements": requirements,
-        "loan_types": LoanType.choices,
     })
 
 

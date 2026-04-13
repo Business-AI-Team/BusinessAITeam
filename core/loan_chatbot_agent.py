@@ -13,7 +13,7 @@ from typing import Any
 from django.conf import settings
 
 from core.models import ChatMessage, ChatRole, LoanRequest, LoanRequestStatus
-from core.document_requirement_service import label_for, requirements_for_application
+from core.document_requirement_service import requirements_for_application
 from core.rag_eligibility import build_rag_hint_for_chat
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,7 @@ def advance_simple_state(application: LoanRequest, user_message: str) -> str:
         application.current_step = "documents"
         application.save(update_fields=["purpose", "current_step", "modification_date"])
         reqs = requirements_for_application(application)
-        lines = [f"- {label_for(r, language)}" for r in reqs]
+        lines = [f"- {r.name}" for r in reqs]
         req_text = "\n".join(lines) if lines else "-"
         reply = (
             f"Merci. Veuillez téléverser les documents suivants dans l'interface :\n{req_text}"

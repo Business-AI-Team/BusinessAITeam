@@ -75,8 +75,8 @@
           {% for req in requirements %}
           <li class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
             <span class="text-amber-500">●</span>
-            {{ req.label_fr }}
-            {% if not req.is_required %}<span class="text-xs text-slate-400">({% trans "optional" %})</span>{% endif %}
+            {{ req.name }}
+            {% if not req.is_mandatory %}<span class="text-xs text-slate-400">({% trans "optional" %})</span>{% endif %}
           </li>
           {% endfor %}
         </ul>
@@ -104,7 +104,7 @@
               <select :name="'req_ids'" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950">
                 <option value="">—</option>
                 {% for req in requirements %}
-                <option value="{{ req.pk }}">{{ req.label_fr }}</option>
+                <option value="{{ req.pk }}">{{ req.name }}</option>
                 {% endfor %}
               </select>
             </div>

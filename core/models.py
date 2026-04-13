@@ -382,34 +382,29 @@ class LoanRequest(models.Model):
 
 class DocumentRequirement(models.Model):
     """
-    Configurable document types required per loan category.
-    Extend by adding rows; `applies_to_loan_types` lists LoanType values.
+    Document type required from the customer when submitting a loan request.
+    Defined by Back-Office staff; all active rows are requested at submission time.
     """
 
-    code = models.SlugField(unique=True, max_length=64)
-    label_fr = models.CharField(max_length=255)
-    label_en = models.CharField(max_length=255)
-    description_fr = models.TextField(blank=True)
-    description_en = models.TextField(blank=True)
-    applies_to_loan_types = models.JSONField(
-        default=list,
-        help_text=_('List of loan type codes, e.g. ["personal", "business"].'),
+    name = models.CharField(
+        max_length=255,
+        verbose_name=_("Name"),
+        help_text=_("e.g. Payslip, ID Card"),
     )
-    is_required = models.BooleanField(default=True)
-    min_files = models.PositiveIntegerField(
-        default=1,
-        help_text=_("Minimum uploads linked to this requirement (e.g. 3 payslips)."),
+    is_mandatory = models.BooleanField(
+        default=True,
+        verbose_name=_("Is Mandatory"),
+        help_text=_("If true, the loan request is blocked until this document is uploaded."),
     )
-    sort_order = models.PositiveIntegerField(default=0)
-    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["sort_order", "code"]
+        ordering = ["name"]
         verbose_name = _("Document Requirement")
         verbose_name_plural = _("Document Requirements")
 
     def __str__(self) -> str:
-        return self.code
+        return self.name
 
 
 # ── Document ──────────────────────────────────────────────────────────────────
