@@ -19,54 +19,53 @@ from core.document_requirement_service import missing_required_codes, requiremen
 from core.face_verification import verify_faces
 from core.liveness_service import run_liveness_check
 from core.loan_engine import run_eligibility_for_application
-from core.models import ApplicationDocument, DocumentKind, LoanApplication, LoanApplicationStatus
+from core.models import Document, DocumentType, LoanRequest, LoanRequestStatus
 from core.security_utils import secure_delete_file
 
 logger = logging.getLogger(__name__)
 
 
-def _find_doc_by_code(application: LoanApplication, code: str) -> ApplicationDocument | None:
-    for doc in application.documents.filter(deleted_at__isnull=True).select_related("requirement"):
+def _find_doc_by_code(loan_request: LoanRequest, code: str) -> Document | None:
+    for doc in loan_request.documents.filter(deleted_at__isnull=True).select_related("requirement"):
         if doc.requirement and doc.requirement.code == code:
             return doc
     return None
 
 
-def _find_identity_doc(application: LoanApplication) -> ApplicationDocument | None:
-    """Prefer explicit identity_card requirement; else latest document tagged as identity."""
-    d = _find_doc_by_code(application, "identity_card")
+def _find_identity_doc(loan_request: LoanRequest) -> Document | None:
+    """Prefer explicit identity_card requirement; else latest document tagged as ID Card."""
+    d = _find_doc_by_code(loan_request, "identity_card")
     if d:
         return d
     return (
-        application.documents.filter(deleted_at__isnull=True, kind=DocumentKind.IDENTITY)
+        loan_request.documents.filter(deleted_at__isnull=True, document_type=DocumentType.ID_CARD)
         .order_by("-created_at")
         .first()
     )
 
 
-def _find_liveness_video_doc(application: LoanApplication) -> ApplicationDocument | None:
-    for doc in application.documents.filter(deleted_at__isnull=True):
-        if doc.kind == DocumentKind.LIVENESS_VIDEO:
+def _find_liveness_video_doc(loan_request: LoanRequest) -> Document | None:
+    for doc in loan_request.documents.filter(deleted_at__isnull=True):
+        if doc.document_type == DocumentType.LIVENESS_VIDEO:
             return doc
-    # Older uploads: liveness webm was saved as FACE_SELFIE because face_selfie requirement won over kind.
-    for doc in application.documents.filter(deleted_at__isnull=True).order_by("-created_at"):
+    for doc in loan_request.documents.filter(deleted_at__isnull=True).order_by("-created_at"):
         name = (doc.original_filename or "").lower()
         if not name.endswith((".webm", ".mp4", ".mov", ".mkv", ".avi")):
             continue
-        if doc.kind == DocumentKind.FACE_SELFIE or (
+        if doc.document_type == DocumentType.FACE_SELFIE or (
             doc.requirement and doc.requirement.code == "face_selfie"
         ):
             return doc
     return None
 
 
-def run_orchestration(application: LoanApplication) -> LoanApplication:
+def run_orchestration(loan_request: LoanRequest) -> LoanRequest:
     """
     Full pipeline: validate docs → analyze images → optional face match → score.
 
     Deletes local files after successful analysis and verification (configurable).
     """
-    language = application.language or "fr"
+    language = loan_request.language or "fr"
     run_log: list[dict[str, Any]] = []
 
     def log(step: str, detail: dict[str, Any]) -> None:
@@ -75,26 +74,26 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
     log("start", {"language": language})
 
     uploaded: set[str] = set()
-    for doc in application.documents.filter(deleted_at__isnull=True):
+    for doc in loan_request.documents.filter(deleted_at__isnull=True):
         if doc.requirement:
             uploaded.add(doc.requirement.code)
 
-    missing = missing_required_codes(application, uploaded)
+    missing = missing_required_codes(loan_request, uploaded)
     if missing:
         log("blocked", {"missing_documents": missing})
-        application.orchestration_log = run_log
-        application.status = LoanApplicationStatus.IN_PROGRESS
-        application.save(update_fields=["orchestration_log", "status", "updated_at"])
-        return application
+        loan_request.orchestration_log = run_log
+        loan_request.status = LoanRequestStatus.PENDING
+        loan_request.save(update_fields=["orchestration_log", "status", "modification_date"])
+        return loan_request
 
     media_root = Path(settings.MEDIA_ROOT)
     delete_after = getattr(settings, "LOANWISE_DELETE_FILES_AFTER_ANALYSIS", True)
 
-    # Phase 1: analyze each file (keep paths for face step); skip raw video (liveness handled later)
-    for doc in list(application.documents.filter(deleted_at__isnull=True)):
+    # Phase 1: analyze each file; skip raw video (liveness handled later)
+    for doc in list(loan_request.documents.filter(deleted_at__isnull=True)):
         rel = doc.storage_path
         path = media_root / rel if rel else None
-        if doc.kind == DocumentKind.LIVENESS_VIDEO:
+        if doc.document_type == DocumentType.LIVENESS_VIDEO:
             prev = doc.analysis_result or {}
             doc.analysis_result = {
                 **prev,
@@ -107,7 +106,7 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
             continue
         name_l = (doc.original_filename or "").lower()
         if name_l.endswith((".webm", ".mp4", ".mov", ".mkv", ".avi")) and (
-            doc.kind == DocumentKind.FACE_SELFIE
+            doc.document_type == DocumentType.FACE_SELFIE
             or (doc.requirement and doc.requirement.code == "face_selfie")
         ):
             prev = doc.analysis_result or {}
@@ -128,13 +127,13 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
             log("document_analyzed", {"document_id": doc.id, "engine": analysis.get("engine")})
 
     # Phase 2: face verification — prefer liveness video + ID; else static selfie + ID
-    id_doc = _find_identity_doc(application)
-    liveness_doc = _find_liveness_video_doc(application)
+    id_doc = _find_identity_doc(loan_request)
+    liveness_doc = _find_liveness_video_doc(loan_request)
     selfie = None
-    for d in application.documents.filter(deleted_at__isnull=True).order_by("-created_at"):
+    for d in loan_request.documents.filter(deleted_at__isnull=True).order_by("-created_at"):
         if liveness_doc and d.pk == liveness_doc.pk:
             continue
-        if d.kind == DocumentKind.FACE_SELFIE or (d.requirement and d.requirement.code == "face_selfie"):
+        if d.document_type == DocumentType.FACE_SELFIE or (d.requirement and d.requirement.code == "face_selfie"):
             selfie = d
             break
 
@@ -152,7 +151,7 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
                 debug=debug_ai,
                 client_sequence_completed=client_done,
             )
-            application.liveness_verification = lv
+            loan_request.liveness_verification = lv
             fv = {
                 "source": "liveness_video",
                 "verified": bool(lv.get("face_match") and lv.get("liveness_passed")),
@@ -163,8 +162,8 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
                 "summary": lv.get("summary"),
                 "match_similarity_percent": lv.get("face_match_similarity_percent"),
             }
-            application.face_verification = fv
-            application.save(update_fields=["liveness_verification", "face_verification", "updated_at"])
+            loan_request.face_verification = fv
+            loan_request.save(update_fields=["liveness_verification", "face_verification", "modification_date"])
             log(
                 "liveness",
                 {
@@ -177,21 +176,21 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
         id_path = media_root / id_doc.storage_path if id_doc.storage_path else None
         selfie_path = media_root / selfie.storage_path if selfie.storage_path else None
         if id_path and selfie_path and id_path.is_file() and selfie_path.is_file():
-            application.liveness_verification = {
+            loan_request.liveness_verification = {
                 "skipped": True,
                 "reason": "static_selfie_only",
                 "note": "No liveness video on file; DeepFace compares ID photo to static selfie only.",
             }
             fv = verify_faces(id_path, selfie_path)
-            application.face_verification = fv
-            application.save(
-                update_fields=["liveness_verification", "face_verification", "updated_at"]
+            loan_request.face_verification = fv
+            loan_request.save(
+                update_fields=["liveness_verification", "face_verification", "modification_date"]
             )
             log("face_verification", {"verified": fv.get("verified"), "skipped": fv.get("skipped")})
 
     # Phase 3: secure deletion
     if delete_after:
-        for doc in list(application.documents.filter(deleted_at__isnull=True)):
+        for doc in list(loan_request.documents.filter(deleted_at__isnull=True)):
             rel = doc.storage_path
             path = media_root / rel if rel else None
             secure_delete_file(path)
@@ -199,34 +198,34 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
             doc.deleted_at = timezone.now()
             doc.save(update_fields=["storage_path", "deleted_at"])
 
-    application.status = LoanApplicationStatus.UNDER_REVIEW
-    application.save(update_fields=["status", "updated_at"])
+    loan_request.status = LoanRequestStatus.PENDING
+    loan_request.save(update_fields=["status", "modification_date"])
     log("scoring", {})
 
-    if not application.submitted_at:
-        application.submitted_at = timezone.now()
-        application.save(update_fields=["submitted_at", "updated_at"])
-    run_eligibility_for_application(application)
-    threshold = Decimal(str(getattr(settings, "LOANWISE_APPROVAL_THRESHOLD", 55)))
-    if application.eligibility_score is not None and application.eligibility_score >= threshold:
-        application.status = LoanApplicationStatus.APPROVED
+    if not loan_request.submitted_at:
+        loan_request.submitted_at = timezone.now()
+        loan_request.save(update_fields=["submitted_at", "modification_date"])
+    run_eligibility_for_application(loan_request)
+    threshold = float(getattr(settings, "LOANWISE_APPROVAL_THRESHOLD", 0.55))
+    if loan_request.score is not None and loan_request.score >= threshold:
+        loan_request.status = LoanRequestStatus.VALIDATED
     else:
-        application.status = LoanApplicationStatus.REJECTED
-    application.save(update_fields=["status", "updated_at"])
-    log("complete", {"score": str(application.eligibility_score), "status": str(application.status)})
-    application.orchestration_log = run_log
-    application.save(update_fields=["orchestration_log", "updated_at"])
-    return application
+        loan_request.status = LoanRequestStatus.REJECTED
+    loan_request.save(update_fields=["status", "modification_date"])
+    log("complete", {"score": str(loan_request.score), "status": str(loan_request.status)})
+    loan_request.orchestration_log = run_log
+    loan_request.save(update_fields=["orchestration_log", "modification_date"])
+    return loan_request
 
 
-def orchestration_progress(application: LoanApplication) -> dict[str, Any]:
+def orchestration_progress(loan_request: LoanRequest) -> dict[str, Any]:
     """Expose progress for UI (steps count, current phase)."""
-    total_req = len(requirements_for_application(application))
-    processed = application.documents.filter(deleted_at__isnull=False).count()
-    log_len = len(application.orchestration_log or [])
+    total_req = len(requirements_for_application(loan_request))
+    processed = loan_request.documents.filter(deleted_at__isnull=False).count()
+    log_len = len(loan_request.orchestration_log or [])
     return {
         "total_requirements": total_req,
         "documents_archived": processed,
         "log_steps": log_len,
-        "status": application.status,
+        "status": loan_request.status,
     }

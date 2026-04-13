@@ -1,144 +1,165 @@
 """
-Server-rendered pages (marketing + dashboard). Uses Django sessions; API remains primary.
+Server-rendered pages — Customer and Back-Office workspaces.
+
+Routing logic:
+  - Unauthenticated → login / register (Customer only)
+  - account_type = customer → customer_dashboard, loan_request_new, loan_request_detail, notifications
+  - account_type = backoffice → backoffice_dashboard, backoffice_loan_requests, backoffice_document_requirements
 """
 
 from __future__ import annotations
 
 import json
+import os
 
+from django.conf import settings as django_settings
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 
-from django.conf import settings as django_settings
-
-from core.application_ui import application_pipeline_progress_percent
-from core.analysis_display import analysis_rows_for_template
 from core.document_requirement_service import seed_default_requirements
-from core.models import LoanApplication
-from core.rag_eligibility import get_eligibility_guidance_from_rag
+from core.models import (
+    Account,
+    AccountType,
+    BackOffice,
+    Customer,
+    Document,
+    DocumentRequirement,
+    DocumentType,
+    LoanRequest,
+    LoanRequestStatus,
+    LoanType,
+    Notification,
+)
 
+Account = get_user_model()
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _is_backoffice(user) -> bool:
+    return getattr(user, "account_type", None) == AccountType.BACKOFFICE
+
+
+def _require_customer(view_fn):
+    """Decorator: must be logged in AND be a Customer."""
+    @login_required
+    def wrapped(request, *args, **kwargs):
+        if _is_backoffice(request.user):
+            return redirect("backoffice_dashboard")
+        return view_fn(request, *args, **kwargs)
+    wrapped.__name__ = view_fn.__name__
+    return wrapped
+
+
+def _require_backoffice(view_fn):
+    """Decorator: must be logged in AND be a Back-Office agent."""
+    @login_required
+    def wrapped(request, *args, **kwargs):
+        if not _is_backoffice(request.user):
+            return redirect("customer_dashboard")
+        return view_fn(request, *args, **kwargs)
+    wrapped.__name__ = view_fn.__name__
+    return wrapped
+
+
+# ── Public pages ──────────────────────────────────────────────────────────────
 
 def home(request: HttpRequest) -> HttpResponse:
-    return render(
-        request,
-        "loanwise/home.html",
-        {
-            "commercial_name": "Smart Loan Eligibility Checker",
-            "team": "Business AI Team (Tantely, Hasina, Hardi, Frederic)",
-        },
-    )
+    return render(request, "loanwise/home.html", {
+        "commercial_name": "Smart Loan Eligibility Checker",
+        "team": "Business AI Team (Tantely, Hasina, Hardi, Frederic)",
+    })
 
 
 @require_http_methods(["GET", "POST"])
 def register_page(request: HttpRequest) -> HttpResponse:
+    """Customer self-registration."""
     if request.user.is_authenticated:
-        return redirect("dashboard")
+        return redirect("backoffice_dashboard" if _is_backoffice(request.user) else "customer_dashboard")
+
     if request.method == "POST":
-        from core.serializers import RegisterSerializer
+        email = request.POST.get("email", "").lower().strip()
+        first_name = request.POST.get("first_name", "").strip()
+        last_name = request.POST.get("last_name", "").strip()
+        phone = request.POST.get("phone", "").strip()
+        address = request.POST.get("address", "").strip()
+        password = request.POST.get("password", "")
+        password2 = request.POST.get("password2", "")
+        lang = request.POST.get("preferred_language", "fr")
 
-        ser = RegisterSerializer(data=request.POST)
-        if ser.is_valid():
-            user = ser.save()
-            from django.conf import settings
+        errors = []
+        if not email:
+            errors.append(_("Email is required."))
+        if Account.objects.filter(email__iexact=email).exists():
+            errors.append(_("An account with this email already exists."))
+        if len(password) < 8:
+            errors.append(_("Password must be at least 8 characters."))
+        if password != password2:
+            errors.append(_("Passwords do not match."))
 
-            from core.email_verification_service import send_registration_verification_email
-            from core.models import EmailVerificationToken
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+            return render(request, "loanwise/register.html", {
+                "form_data": request.POST,
+            })
 
-            if getattr(settings, "LOANWISE_AUTO_VERIFY_EMAIL_IN_DEBUG", False) and settings.DEBUG:
-                user.email_verified = True
-                user.save(update_fields=["email_verified"])
+        username = email.split("@")[0]
+        base = username
+        i = 1
+        while Account.objects.filter(username=username).exists():
+            username = f"{base}{i}"
+            i += 1
 
-            evt = EmailVerificationToken.create_for_user(user)
-            verify_url = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/api/auth/verify/?token={evt.token}"
-            try:
-                send_registration_verification_email(user, evt)
-            except Exception:
-                messages.warning(
-                    request,
-                    _("We could not send the email. Enter the code from the server log or ask an administrator."),
-                )
-            if user.email_verified and getattr(settings, "LOANWISE_AUTO_VERIFY_EMAIL_IN_DEBUG", False):
-                messages.success(request, _("Account created. You can log in — your email is marked verified in development."))
-            else:
-                messages.success(request, _("Account created. Check your email for your verification code."))
-            if not user.email_verified and (getattr(settings, "DEBUG", False) or "console" in settings.EMAIL_BACKEND.lower()):
-                messages.info(
-                    request,
-                    _(
-                        "Development: the email is printed in the runserver terminal. Your verification code is %(code)s. "
-                        "You can also open: %(url)s"
-                    )
-                    % {"code": evt.code, "url": verify_url},
-                )
-            return redirect("login_page")
-        messages.error(request, _("Please correct the errors below."))
+        user = Account(
+            email=email,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            preferred_language=lang,
+            account_type=AccountType.CUSTOMER,
+            email_verified=True,  # simplified: no email verification for now
+        )
+        user.set_password(password)
+        user.save()
+
+        # Create linked Customer profile
+        customer = Customer.objects.create(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            address=address,
+        )
+        user.customer = customer
+        user.save(update_fields=["customer"])
+
+        messages.success(request, _("Account created. You can now log in."))
+        return redirect("login_page")
+
     return render(request, "loanwise/register.html")
 
 
 @require_http_methods(["GET", "POST"])
 def login_page(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
-        return redirect("dashboard")
-    if request.method == "POST":
-        from django.contrib.auth import authenticate
+        return redirect("backoffice_dashboard" if _is_backoffice(request.user) else "customer_dashboard")
 
+    if request.method == "POST":
         email = request.POST.get("email", "").lower().strip()
         password = request.POST.get("password", "")
         user = authenticate(request, username=email, password=password)
         if user:
             login(request, user)
-            return redirect("dashboard")
+            if _is_backoffice(user):
+                return redirect("backoffice_dashboard")
+            return redirect("customer_dashboard")
         messages.error(request, _("Invalid email or password."))
     return render(request, "loanwise/login.html")
-
-
-@require_http_methods(["GET", "POST"])
-def verify_email_page(request: HttpRequest) -> HttpResponse:
-    """Enter email + numeric code from the registration email."""
-    from django.contrib.auth import get_user_model
-
-    from core.email_verification_service import verify_email_with_code
-
-    if request.user.is_authenticated and request.user.email_verified:
-        return redirect("dashboard")
-
-    if request.method == "POST":
-        email = (request.POST.get("email") or "").strip()
-        code = (request.POST.get("code") or "").strip()
-        ok, detail = verify_email_with_code(email, code)
-        if ok:
-            User = get_user_model()
-            user = User.objects.filter(email__iexact=email.lower()).first()
-            if user:
-                from django.contrib.auth import login
-
-                login(request, user)
-            if detail == "already_verified":
-                messages.info(request, _("This email was already verified. You are signed in."))
-            else:
-                messages.success(request, _("Your email is verified. Welcome!"))
-            return redirect("dashboard")
-        if detail == "email_and_code_required":
-            messages.error(request, _("Please enter your email and the verification code."))
-        elif detail == "invalid_code":
-            messages.error(request, _("The code must contain exactly six digits."))
-        else:
-            messages.error(request, _("Invalid email or verification code. Check the code in your email and try again."))
-        return render(
-            request,
-            "loanwise/verify_email.html",
-            {"prefill_email": email},
-        )
-
-    prefill = ""
-    if request.user.is_authenticated:
-        prefill = request.user.email
-    return render(request, "loanwise/verify_email.html", {"prefill_email": prefill})
 
 
 @login_required
@@ -147,76 +168,455 @@ def logout_view(request: HttpRequest) -> HttpResponse:
     return redirect("home")
 
 
-@login_required
-def dashboard(request: HttpRequest) -> HttpResponse:
+# Kept for backward compat
+def dashboard(request):
+    if not request.user.is_authenticated:
+        return redirect("login_page")
+    if _is_backoffice(request.user):
+        return redirect("backoffice_dashboard")
+    return redirect("customer_dashboard")
+
+
+# ── Customer workspace ────────────────────────────────────────────────────────
+
+@_require_customer
+def customer_dashboard(request: HttpRequest) -> HttpResponse:
     seed_default_requirements()
-    apps = LoanApplication.objects.filter(user=request.user)[:50]
-    return render(
-        request,
-        "loanwise/dashboard.html",
-        {"applications": apps},
+    loan_requests = LoanRequest.objects.filter(account=request.user).order_by("-creation_date")
+    # Unread notifications count
+    unread_count = 0
+    for lr in loan_requests:
+        try:
+            if not lr.notification.read:
+                unread_count += 1
+        except Exception:
+            pass
+    return render(request, "loanwise/customer/dashboard.html", {
+        "loan_requests": loan_requests,
+        "unread_count": unread_count,
+    })
+
+
+@_require_customer
+@require_http_methods(["GET", "POST"])
+def loan_request_new(request: HttpRequest) -> HttpResponse:
+    """Create a new LoanRequest with initial documents."""
+    seed_default_requirements()
+    requirements = DocumentRequirement.objects.filter(active=True).order_by("sort_order")
+
+    if request.method == "POST":
+        loan_type = request.POST.get("loan_type", LoanType.PERSONAL)
+        purpose = request.POST.get("purpose", "").strip()
+        amount = request.POST.get("amount_requested", "0").replace(",", ".").strip() or "0"
+        term = request.POST.get("term_months", "12").strip() or "12"
+        income = request.POST.get("annual_income", "0").replace(",", ".").strip() or "0"
+
+        try:
+            from decimal import Decimal
+            amount_d = Decimal(amount)
+            income_d = Decimal(income)
+            term_i = int(term)
+        except Exception:
+            messages.error(request, _("Please enter valid numbers."))
+            return render(request, "loanwise/customer/loan_request_new.html", {
+                "requirements": requirements,
+                "loan_types": LoanType.choices,
+                "form_data": request.POST,
+            })
+
+        # Get or create Customer profile
+        customer = getattr(request.user, "customer", None)
+        if customer is None:
+            customer = Customer.objects.create(
+                email=request.user.email,
+                first_name=request.user.first_name,
+                last_name=request.user.last_name,
+            )
+            request.user.customer = customer
+            request.user.save(update_fields=["customer"])
+
+        lr = LoanRequest.objects.create(
+            account=request.user,
+            customer=customer,
+            loan_type=loan_type,
+            purpose=purpose,
+            amount_requested=amount_d,
+            term_months=term_i,
+            annual_income=income_d,
+            status=LoanRequestStatus.PENDING,
+            language=getattr(request.user, "preferred_language", "fr"),
+        )
+
+        # Handle document uploads
+        files = request.FILES.getlist("documents")
+        doc_types = request.POST.getlist("doc_types")
+        req_ids = request.POST.getlist("req_ids")
+
+        for i, f in enumerate(files):
+            dtype = doc_types[i] if i < len(doc_types) else DocumentType.OTHER
+            req_id = req_ids[i] if i < len(req_ids) else None
+            req = None
+            if req_id:
+                req = DocumentRequirement.objects.filter(pk=req_id).first()
+
+            from django.core.files.storage import default_storage
+            from core.security_utils import sha256_file
+            rel_path = f"loanwise/{lr.id}/{f.name}"
+            path = default_storage.save(rel_path, f)
+            full = default_storage.path(path)
+            digest = sha256_file(full)
+
+            Document.objects.create(
+                loan_request=lr,
+                requirement=req,
+                document_type=dtype,
+                original_filename=f.name,
+                content_type=f.content_type or "",
+                sha256_hex=digest,
+                file_size=f.size,
+                storage_path=path,
+                file=path,
+            )
+
+        # Create notification
+        Notification.objects.get_or_create(loan_request=lr, defaults={"read": False})
+
+        messages.success(request, _("Loan request submitted successfully."))
+        return redirect("loan_request_detail", pk=lr.pk)
+
+    return render(request, "loanwise/customer/loan_request_new.html", {
+        "requirements": requirements,
+        "loan_types": LoanType.choices,
+        "document_types": DocumentType.choices,
+    })
+
+
+@_require_customer
+def loan_request_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    lr = get_object_or_404(LoanRequest, pk=pk, account=request.user)
+    documents = lr.documents.all().order_by("-created_at")
+    requirements = DocumentRequirement.objects.filter(active=True).order_by("sort_order")
+
+    # Handle additional document upload
+    if request.method == "POST":
+        files = request.FILES.getlist("documents")
+        doc_types = request.POST.getlist("doc_types")
+        req_ids = request.POST.getlist("req_ids")
+        for i, f in enumerate(files):
+            dtype = doc_types[i] if i < len(doc_types) else DocumentType.OTHER
+            req_id = req_ids[i] if i < len(req_ids) else None
+            req = DocumentRequirement.objects.filter(pk=req_id).first() if req_id else None
+            from django.core.files.storage import default_storage
+            from core.security_utils import sha256_file
+            rel_path = f"loanwise/{lr.id}/{f.name}"
+            path = default_storage.save(rel_path, f)
+            full = default_storage.path(path)
+            digest = sha256_file(full)
+            Document.objects.create(
+                loan_request=lr,
+                requirement=req,
+                document_type=dtype,
+                original_filename=f.name,
+                content_type=f.content_type or "",
+                sha256_hex=digest,
+                file_size=f.size,
+                storage_path=path,
+            )
+        messages.success(request, _("Document(s) added."))
+        return redirect("loan_request_detail", pk=pk)
+
+    return render(request, "loanwise/customer/loan_request_detail.html", {
+        "loan_request": lr,
+        "documents": documents,
+        "requirements": requirements,
+        "document_types": DocumentType.choices,
+        "status_choices": LoanRequestStatus.choices,
+    })
+
+
+@_require_customer
+def notifications_page(request: HttpRequest) -> HttpResponse:
+    loan_requests = LoanRequest.objects.filter(account=request.user).order_by("-creation_date")
+    notifications = []
+    for lr in loan_requests:
+        try:
+            n = lr.notification
+            notifications.append({"notification": n, "loan_request": lr})
+            if not n.read:
+                n.read = True
+                n.save(update_fields=["read"])
+        except Exception:
+            pass
+    return render(request, "loanwise/customer/notifications.html", {
+        "notifications": notifications,
+    })
+
+
+# ── Back-Office workspace ─────────────────────────────────────────────────────
+
+@_require_backoffice
+def backoffice_dashboard(request: HttpRequest) -> HttpResponse:
+    total = LoanRequest.objects.count()
+    pending = LoanRequest.objects.filter(status=LoanRequestStatus.PENDING).count()
+    validated = LoanRequest.objects.filter(status=LoanRequestStatus.VALIDATED).count()
+    rejected = LoanRequest.objects.filter(status=LoanRequestStatus.REJECTED).count()
+    recent = LoanRequest.objects.select_related("customer", "account").order_by("-creation_date")[:10]
+    return render(request, "loanwise/backoffice/dashboard.html", {
+        "total": total,
+        "pending": pending,
+        "validated": validated,
+        "rejected": rejected,
+        "recent_requests": recent,
+    })
+
+
+@_require_backoffice
+def backoffice_loan_requests(request: HttpRequest) -> HttpResponse:
+    status_filter = request.GET.get("status", "")
+    qs = LoanRequest.objects.select_related("customer", "account").order_by("-creation_date")
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    return render(request, "loanwise/backoffice/loan_requests.html", {
+        "loan_requests": qs,
+        "status_filter": status_filter,
+        "status_choices": LoanRequestStatus.choices,
+    })
+
+
+@_require_backoffice
+def backoffice_loan_request_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    lr = get_object_or_404(LoanRequest, pk=pk)
+    documents = lr.documents.all().order_by("-created_at")
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "update_status":
+            new_status = request.POST.get("status")
+            if new_status in dict(LoanRequestStatus.choices):
+                lr.status = new_status
+                lr.save(update_fields=["status", "modification_date"])
+                # Create/update notification
+                Notification.objects.update_or_create(
+                    loan_request=lr,
+                    defaults={"read": False},
+                )
+                messages.success(request, _("Status updated."))
+        return redirect("backoffice_loan_request_detail", pk=pk)
+
+    return render(request, "loanwise/backoffice/loan_request_detail.html", {
+        "loan_request": lr,
+        "documents": documents,
+        "status_choices": LoanRequestStatus.choices,
+    })
+
+
+@_require_backoffice
+@require_http_methods(["GET", "POST"])
+def backoffice_document_requirements(request: HttpRequest) -> HttpResponse:
+    """Manage DocumentRequirement records."""
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "create":
+            code = request.POST.get("code", "").strip().lower().replace(" ", "_")
+            label_fr = request.POST.get("label_fr", "").strip()
+            label_en = request.POST.get("label_en", "").strip()
+            desc_fr = request.POST.get("description_fr", "").strip()
+            desc_en = request.POST.get("description_en", "").strip()
+            loan_types = request.POST.getlist("loan_types")
+            is_required = request.POST.get("is_required") == "on"
+            sort_order = int(request.POST.get("sort_order", 0) or 0)
+            if code and label_fr:
+                DocumentRequirement.objects.update_or_create(
+                    code=code,
+                    defaults={
+                        "label_fr": label_fr,
+                        "label_en": label_en or label_fr,
+                        "description_fr": desc_fr,
+                        "description_en": desc_en,
+                        "applies_to_loan_types": loan_types,
+                        "is_required": is_required,
+                        "sort_order": sort_order,
+                        "active": True,
+                    },
+                )
+                messages.success(request, _("Requirement saved."))
+            else:
+                messages.error(request, _("Code and French label are required."))
+
+        elif action == "toggle":
+            req_id = request.POST.get("req_id")
+            req = DocumentRequirement.objects.filter(pk=req_id).first()
+            if req:
+                req.active = not req.active
+                req.save(update_fields=["active"])
+                messages.success(request, _("Requirement updated."))
+
+        elif action == "delete":
+            req_id = request.POST.get("req_id")
+            DocumentRequirement.objects.filter(pk=req_id).delete()
+            messages.success(request, _("Requirement deleted."))
+
+        return redirect("backoffice_document_requirements")
+
+    requirements = DocumentRequirement.objects.all().order_by("sort_order", "code")
+    return render(request, "loanwise/backoffice/document_requirements.html", {
+        "requirements": requirements,
+        "loan_types": LoanType.choices,
+    })
+
+
+@_require_backoffice
+@require_http_methods(["GET", "POST"])
+def backoffice_agents(request: HttpRequest) -> HttpResponse:
+    """
+    Manage Back-Office agent accounts from a JSON file.
+    File: BACKOFFICE_AGENTS_FILE setting (default: backoffice_agents.json in BASE_DIR).
+    """
+    agents_file = getattr(
+        django_settings,
+        "BACKOFFICE_AGENTS_FILE",
+        os.path.join(django_settings.BASE_DIR, "backoffice_agents.json"),
     )
 
+    def _load():
+        if os.path.exists(agents_file):
+            with open(agents_file, encoding="utf-8") as f:
+                return json.load(f)
+        return []
+
+    def _save(data):
+        with open(agents_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "create":
+            email = request.POST.get("email", "").lower().strip()
+            first_name = request.POST.get("first_name", "").strip()
+            last_name = request.POST.get("last_name", "").strip()
+            cin = request.POST.get("cin_number", "").strip()
+            password = request.POST.get("password", "")
+
+            if not email or not password:
+                messages.error(request, _("Email and password are required."))
+            elif Account.objects.filter(email__iexact=email).exists():
+                messages.error(request, _("An account with this email already exists."))
+            else:
+                username = email.split("@")[0]
+                base = username
+                i = 1
+                while Account.objects.filter(username=username).exists():
+                    username = f"{base}{i}"
+                    i += 1
+
+                bo = BackOffice.objects.create(
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    cin_number=cin,
+                )
+                user = Account(
+                    email=email,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
+                    account_type=AccountType.BACKOFFICE,
+                    email_verified=True,
+                    back_office=bo,
+                )
+                user.set_password(password)
+                user.save()
+
+                # Also record in JSON file
+                agents = _load()
+                agents.append({
+                    "id": user.pk,
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "cin_number": cin,
+                })
+                _save(agents)
+                messages.success(request, _("Back-Office agent created."))
+
+        elif action == "update":
+            agent_id = request.POST.get("agent_id")
+            first_name = request.POST.get("first_name", "").strip()
+            last_name = request.POST.get("last_name", "").strip()
+            new_password = request.POST.get("new_password", "").strip()
+            user = Account.objects.filter(pk=agent_id, account_type=AccountType.BACKOFFICE).first()
+            if user:
+                user.first_name = first_name
+                user.last_name = last_name
+                if new_password:
+                    user.set_password(new_password)
+                user.save()
+                if user.back_office:
+                    user.back_office.first_name = first_name
+                    user.back_office.last_name = last_name
+                    user.back_office.save(update_fields=["first_name", "last_name"])
+                # Sync JSON
+                agents = _load()
+                for a in agents:
+                    if a.get("id") == int(agent_id):
+                        a["first_name"] = first_name
+                        a["last_name"] = last_name
+                        break
+                _save(agents)
+                messages.success(request, _("Agent updated."))
+
+        elif action == "delete":
+            agent_id = request.POST.get("agent_id")
+            user = Account.objects.filter(pk=agent_id, account_type=AccountType.BACKOFFICE).first()
+            if user and user.pk != request.user.pk:
+                if user.back_office:
+                    user.back_office.delete()
+                user.delete()
+                agents = _load()
+                agents = [a for a in agents if a.get("id") != int(agent_id)]
+                _save(agents)
+                messages.success(request, _("Agent deleted."))
+            else:
+                messages.error(request, _("Cannot delete your own account."))
+
+        return redirect("backoffice_agents")
+
+    agents = Account.objects.filter(account_type=AccountType.BACKOFFICE).select_related("back_office").order_by("email")
+    return render(request, "loanwise/backoffice/agents.html", {
+        "agents": agents,
+        "agents_file": agents_file,
+    })
+
+
+# ── Legacy / compat ───────────────────────────────────────────────────────────
 
 @login_required
 def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    seed_default_requirements()
-    app = LoanApplication.objects.filter(pk=pk, user=request.user).first()
-    if not app:
-        messages.error(request, _("Application not found."))
-        return redirect("dashboard")
-    lang = getattr(request.user, "preferred_language", None) or "fr"
-    rag_guidance = get_eligibility_guidance_from_rag(app.loan_type or "personal", lang)
-    if lang.startswith("fr"):
-        rag_summary = (rag_guidance.get("summary_fr") or rag_guidance.get("summary_en") or "").strip()
-    else:
-        rag_summary = (rag_guidance.get("summary_en") or rag_guidance.get("summary_fr") or "").strip()
-    ctx = {
-        "application": app,
-        "lw_initial_progress": application_pipeline_progress_percent(app),
-        "lw_rag_eligibility": rag_guidance,
-        "lw_rag_summary": rag_summary,
-        "lw_email_verified": request.user.email_verified,
-        "lw_require_email": django_settings.LOANWISE_REQUIRE_EMAIL_VERIFICATION,
-        # JSON for client-side liveness coach (MediaPipe) — keys must match static/js/loanwise_liveness_realtime.js
-        "lw_analysis_rows": analysis_rows_for_template(app),
-        "lw_liveness_msg_dict": {
-            "loading_model": _("Loading face detection model…"),
-            "no_face": _("No face detected — position yourself in front of the camera."),
-            "show_face": _(
-                "Look straight at the camera. Next, we will ask you to turn your head left, then right, then blink."
-            ),
-            "turn_left": _("Turn your head slowly to the left (your left)."),
-            "turn_right": _("Now turn your head slowly to the right (your right)."),
-            "blink": _("Blink your eyes naturally once or twice."),
-            "done": _("Sequence validated — closing the camera and sending your video…"),
-            "uploading_auto": _("Sending the video to the server…"),
-            "video_saved_ok": _("Video received. You can run the AI pipeline to compare it with your ID."),
-            "cancelled": _("Liveness cancelled."),
-            "no_lib": _("Real-time analysis unavailable (MediaPipe did not load). Allow scripts from the CDN or try another browser."),
-        },
-    }
-    if django_settings.DEBUG:
-        docs = list(app.documents.all().order_by("-created_at"))
-        ctx["lw_ai_debug_json"] = json.dumps(
-            {
-                "face_verification": app.face_verification,
-                "liveness_verification": app.liveness_verification,
-                "orchestration_log": app.orchestration_log,
-                "documents": [
-                    {
-                        "id": d.id,
-                        "kind": d.kind,
-                        "original_filename": d.original_filename,
-                        "analysis_result": d.analysis_result,
-                    }
-                    for d in docs
-                ],
-            },
-            indent=2,
-            ensure_ascii=False,
-            default=str,
-        )
-    else:
-        ctx["lw_ai_debug_json"] = None
-    return render(request, "loanwise/application_detail.html", ctx)
+    """Legacy redirect to new customer detail view."""
+    if _is_backoffice(request.user):
+        return redirect("backoffice_loan_request_detail", pk=pk)
+    return redirect("loan_request_detail", pk=pk)
+
+
+@require_http_methods(["GET", "POST"])
+def verify_email_page(request: HttpRequest) -> HttpResponse:
+    from core.email_verification_service import verify_email_with_code
+    if request.user.is_authenticated and request.user.email_verified:
+        return redirect("customer_dashboard")
+    if request.method == "POST":
+        email = (request.POST.get("email") or "").strip()
+        code = (request.POST.get("code") or "").strip()
+        ok, detail = verify_email_with_code(email, code)
+        if ok:
+            UserModel = get_user_model()
+            user = UserModel.objects.filter(email__iexact=email.lower()).first()
+            if user:
+                login(request, user)
+            messages.success(request, _("Email verified. Welcome!"))
+            return redirect("customer_dashboard")
+        messages.error(request, _("Invalid email or verification code."))
+        return render(request, "loanwise/verify_email.html", {"prefill_email": email})
+    prefill = request.user.email if request.user.is_authenticated else ""
+    return render(request, "loanwise/verify_email.html", {"prefill_email": prefill})

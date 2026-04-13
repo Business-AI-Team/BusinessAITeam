@@ -26,26 +26,31 @@ from core.email_verification_service import send_registration_verification_email
 from core.loan_chatbot_agent import run_chat_turn
 from core.loan_orchestrator_agent import run_orchestration
 from core.models import (
-    ApplicationDocument,
+    Document,
     ChatMessage,
-    DocumentKind,
+    DocumentType,
     DocumentRequirement,
     EmailVerificationToken,
-    LoanApplication,
+    LoanRequest,
 )
 from core.pdf_report import build_application_pdf
 from core.security_utils import sha256_file
 from core.serializers import (
-    ApplicationDocumentSerializer,
+    DocumentSerializer,
     ChatMessageSerializer,
     ChatSendSerializer,
     DocumentRequirementSerializer,
-    LoanApplicationSerializer,
-    LoanApplicationWriteSerializer,
+    LoanRequestSerializer,
+    LoanRequestWriteSerializer,
     RegisterSerializer,
     UserPreferencesSerializer,
     UserSerializer,
 )
+
+# Backward-compat aliases used below
+ApplicationDocumentSerializer = DocumentSerializer
+LoanApplicationSerializer = LoanRequestSerializer
+LoanApplicationWriteSerializer = LoanRequestWriteSerializer
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -129,57 +134,57 @@ class MeView(APIView):
     retrieve=extend_schema(tags=["applications"]),
     create=extend_schema(tags=["applications"]),
 )
-class LoanApplicationViewSet(viewsets.ModelViewSet):
+class LoanRequestViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post", "head", "options", "patch"]
 
     def get_queryset(self):
-        return LoanApplication.objects.filter(user=self.request.user)
+        return LoanRequest.objects.filter(account=self.request.user)
 
     def get_serializer_class(self):
         if self.action in ("create", "partial_update"):
-            return LoanApplicationWriteSerializer
-        return LoanApplicationSerializer
+            return LoanRequestWriteSerializer
+        return LoanRequestSerializer
 
     def perform_create(self, serializer):
         lang = serializer.validated_data.get("language") or self.request.user.preferred_language or "fr"
-        serializer.save(user=self.request.user, language=lang)
+        serializer.save(account=self.request.user, language=lang)
 
     def create(self, request, *args, **kwargs):
-        """Return full application payload (incl. id, reference) after create — needed by the web UI."""
+        """Return full loan request payload (incl. id, reference) after create — needed by the web UI."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         instance = serializer.instance
-        assert isinstance(instance, LoanApplication)
-        out = LoanApplicationSerializer(instance, context=self.get_serializer_context())
+        assert isinstance(instance, LoanRequest)
+        out = LoanRequestSerializer(instance, context=self.get_serializer_context())
         headers = self.get_success_headers(out.data)
         return Response(out.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=["post"])
     def chat(self, request, pk=None):
-        app = self.get_object()
+        loan_req = self.get_object()
         ser = ChatSendSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        reply = run_chat_turn(app, ser.validated_data["message"])
+        reply = run_chat_turn(loan_req, ser.validated_data["message"])
         return Response({"reply": reply})
 
     @action(detail=True, methods=["get"])
     def messages(self, request, pk=None):
-        app = self.get_object()
-        qs = ChatMessage.objects.filter(application=app)
+        loan_req = self.get_object()
+        qs = ChatMessage.objects.filter(loan_request=loan_req)
         return Response(ChatMessageSerializer(qs, many=True).data)
 
     @action(detail=True, methods=["post"])
     def orchestrate(self, request, pk=None):
-        app = self.get_object()
+        loan_req = self.get_object()
         require = getattr(settings, "LOANWISE_REQUIRE_EMAIL_VERIFICATION", True)
         if require and not request.user.email_verified:
             return Response({"detail": "email not verified", "code": "email_not_verified"}, status=403)
         try:
-            app = run_orchestration(app)
+            loan_req = run_orchestration(loan_req)
         except Exception as e:
-            logger.exception("Orchestration failed for application %s", app.pk)
+            logger.exception("Orchestration failed for loan request %s", loan_req.pk)
             payload = {
                 "detail": "Orchestration failed; see server logs or retry later.",
                 "code": "orchestration_failed",
@@ -189,11 +194,11 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 payload["message"] = str(e)
             return Response(payload, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        app.refresh_from_db()
-        steps = app.orchestration_log or []
+        loan_req.refresh_from_db()
+        steps = loan_req.orchestration_log or []
         last = steps[-1] if steps else {}
         step_name = last.get("step")
-        lang = app.language or "fr"
+        lang = loan_req.language or "fr"
         missing_codes: list[str] = []
         if step_name == "blocked":
             missing_codes = list(last.get("detail", {}).get("missing_documents") or [])
@@ -211,18 +216,22 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         }
         return Response(
             {
-                "application": LoanApplicationSerializer(app).data,
+                "application": LoanRequestSerializer(loan_req).data,
                 "pipeline": pipeline,
             }
         )
 
     @action(detail=True, methods=["get"])
     def export_pdf(self, request, pk=None):
-        app = self.get_object()
-        pdf_bytes = build_application_pdf(app)
+        loan_req = self.get_object()
+        pdf_bytes = build_application_pdf(loan_req)
         resp = HttpResponse(pdf_bytes, content_type="application/pdf")
-        resp["Content-Disposition"] = f'attachment; filename="loanwise-{app.reference}.pdf"'
+        resp["Content-Disposition"] = f'attachment; filename="loanwise-{loan_req.reference}.pdf"'
         return resp
+
+
+# Backward-compat alias for URL routing
+LoanApplicationViewSet = LoanRequestViewSet
 
 
 @extend_schema(tags=["documents"])
@@ -230,7 +239,7 @@ class DocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, application_id: int):
-        app = get_object_or_404(LoanApplication, pk=application_id, user=request.user)
+        app = get_object_or_404(LoanRequest, pk=application_id, account=request.user)
         requirement_id = request.POST.get("requirement_id")
         kind = request.POST.get("kind") or "generic"
         file = request.FILES.get("file")
@@ -254,16 +263,16 @@ class DocumentUploadView(APIView):
         path = default_storage.save(rel_path, file)
         full = default_storage.path(path)
         digest = sha256_file(full)
-        valid_kinds = {c[0] for c in DocumentKind.choices}
+        valid_types = {c[0] for c in DocumentType.choices}
         analysis_result: dict = {}
         if kind == "liveness_video":
             # Set by the web UI only after the guided MediaPipe sequence completes (recording stops then).
             raw_client = (request.POST.get("client_liveness_completed") or "").strip().lower()
             analysis_result["client_sequence_completed"] = raw_client in ("1", "true", "yes", "on")
-        ad = ApplicationDocument.objects.create(
-            application=app,
+        doc = Document.objects.create(
+            loan_request=app,
             requirement=req,
-            kind=kind if kind in valid_kinds else DocumentKind.GENERIC,
+            document_type=kind if kind in valid_types else DocumentType.OTHER,
             original_filename=file.name,
             content_type=file.content_type or "",
             sha256_hex=digest,
@@ -273,12 +282,12 @@ class DocumentUploadView(APIView):
         )
         # Liveness must win over requirement=face_selfie (otherwise webm is mis-tagged as FACE_SELFIE).
         if kind == "liveness_video":
-            ad.kind = DocumentKind.LIVENESS_VIDEO
-            ad.save(update_fields=["kind"])
+            doc.document_type = DocumentType.LIVENESS_VIDEO
+            doc.save(update_fields=["document_type"])
         elif kind == "face_selfie" or (req and req.code == "face_selfie"):
-            ad.kind = DocumentKind.FACE_SELFIE
-            ad.save(update_fields=["kind"])
-        return Response(ApplicationDocumentSerializer(ad).data, status=201)
+            doc.document_type = DocumentType.FACE_SELFIE
+            doc.save(update_fields=["document_type"])
+        return Response(DocumentSerializer(doc).data, status=201)
 
 
 @extend_schema(tags=["requirements"])

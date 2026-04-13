@@ -5,7 +5,7 @@ labels by language, and easy extension via DB rows or future rules engine.
 
 from __future__ import annotations
 
-from core.models import DocumentRequirement, LoanApplication, LoanType
+from core.models import DocumentRequirement, LoanRequest, LoanType
 
 
 def requirements_for_loan_type(loan_type: str) -> list[DocumentRequirement]:
@@ -19,7 +19,7 @@ def requirements_for_loan_type(loan_type: str) -> list[DocumentRequirement]:
     return [r for r in qs if loan_type in (r.applies_to_loan_types or [])]
 
 
-def requirements_for_application(application: LoanApplication) -> list[DocumentRequirement]:
+def requirements_for_application(application: LoanRequest) -> list[DocumentRequirement]:
     return requirements_for_loan_type(application.loan_type)
 
 
@@ -36,7 +36,7 @@ def description_for(req: DocumentRequirement, language: str) -> str:
 
 
 def missing_required_codes(
-    application: LoanApplication,
+    application: LoanRequest,
     uploaded_codes: set[str],
 ) -> list[str]:
     """

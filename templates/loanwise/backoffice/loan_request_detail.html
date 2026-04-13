@@ -1,0 +1,128 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ loan_request.reference }} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-6">
+
+  {# Breadcrumb #}
+  <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="{% url 'backoffice_dashboard' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "Dashboard" %}</a>
+    <span>›</span>
+    <a href="{% url 'backoffice_loan_requests' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "Requests" %}</a>
+    <span>›</span>
+    <span class="font-medium text-slate-900 dark:text-white">{{ loan_request.reference }}</span>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for msg in messages %}
+    <div class="rounded-xl px-4 py-3 text-sm {% if msg.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Header card #}
+  <div class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ loan_request.get_loan_type_display }}</p>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ loan_request.reference }}</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ loan_request.creation_date|date:"d/m/Y H:i" }}</p>
+      {% if loan_request.customer %}
+      <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">
+        👤 {{ loan_request.customer.first_name }} {{ loan_request.customer.last_name }}
+        {% if loan_request.customer.email %} · {{ loan_request.customer.email }}{% endif %}
+        {% if loan_request.customer.phone %} · {{ loan_request.customer.phone }}{% endif %}
+      </p>
+      {% endif %}
+    </div>
+    {% if loan_request.score is not None %}
+    <div class="text-center">
+      <p class="text-4xl font-black text-sky-600 dark:text-sky-400">{{ loan_request.score|floatformat:0 }}%</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Score" %}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Loan details #}
+  <div class="grid gap-4 sm:grid-cols-3">
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Amount" %}</p>
+      <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ loan_request.amount_requested|floatformat:2 }} €</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Term" %}</p>
+      <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ loan_request.term_months }} {% trans "months" %}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Annual income" %}</p>
+      <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ loan_request.annual_income|floatformat:2 }} €</p>
+    </div>
+  </div>
+
+  {% if loan_request.purpose %}
+  <div class="rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Purpose" %}</p>
+    <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">{{ loan_request.purpose }}</p>
+  </div>
+  {% endif %}
+
+  {# Update status #}
+  <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+    <h2 class="mb-4 font-semibold text-slate-900 dark:text-white">{% trans "Update Status" %}</h2>
+    <form method="post" class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update_status">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "New status" %}</label>
+        <select name="status" class="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if loan_request.status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="rounded-xl bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-500">
+        {% trans "Update" %}
+      </button>
+    </form>
+  </div>
+
+  {# Documents #}
+  <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+    <h2 class="mb-4 font-semibold text-slate-900 dark:text-white">{% trans "Documents" %} ({{ documents|length }})</h2>
+    {% if documents %}
+    <div class="grid gap-3">
+      {% for doc in documents %}
+      <div class="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+        <span class="text-2xl">📄</span>
+        <div class="flex-1 min-w-0">
+          <p class="truncate font-medium text-slate-900 dark:text-white text-sm">{{ doc.original_filename }}</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">{{ doc.get_document_type_display }} · {{ doc.created_at|date:"d/m/Y H:i" }}</p>
+        </div>
+        {% if doc.requirement %}
+        <span class="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">{{ doc.requirement.label_fr }}</span>
+        {% endif %}
+        {% if doc.file %}
+        <a href="{{ doc.file.url }}" target="_blank" class="shrink-0 rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">{% trans "View" %}</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400 dark:text-slate-500">{% trans "No documents uploaded." %}</p>
+    {% endif %}
+  </div>
+
+  {# AI Check — static placeholder #}
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+    <p class="text-2xl">🤖</p>
+    <p class="mt-2 font-medium text-slate-700 dark:text-slate-200">{% trans "AI Eligibility Check" %}</p>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "The AI scoring pipeline will be triggered once all documents are uploaded." %}</p>
+    <button disabled class="mt-3 rounded-xl bg-slate-200 px-5 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500">
+      {% trans "Run AI Check (coming soon)" %}
+    </button>
+  </div>
+
+</div>
+{% endblock %}

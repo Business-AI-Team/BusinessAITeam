@@ -44,167 +44,6 @@ msgstr "Déjà un compte ?"
 msgid "Amount must be positive."
 msgstr "Le montant doit être positif."
 
-msgid "Analysis complete."
-msgstr "Analyse terminée."
-
-msgid "Analysis results"
-msgstr "Résultats d’analyse"
-
-msgid ""
-"OK / Not OK shows whether the check passed. Similarity %% is an indicative "
-"score derived from DeepFace (not a legal proof)."
-msgstr ""
-"OK / Non OK indique si le contrôle est réussi. Le %% de similarité est un "
-"score indicatif issu de DeepFace (pas une preuve juridique)."
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Not OK"
-msgstr "Non OK"
-
-msgid "Approximate similarity with the photo on your ID: about %(pct)s%%."
-msgstr "Similarité approximative avec la photo sur votre pièce d’identité : environ %(pct)s %%."
-
-msgid "Best match uses frames from your liveness video vs the ID photo."
-msgstr "La meilleure correspondance utilise des images extraites de votre vidéo de vivacité et la photo sur la pièce d’identité."
-
-msgid "Comparison: ID photo vs uploaded selfie image."
-msgstr "Comparaison : photo d’identité vs selfie téléversé."
-
-msgid "Computed score after document and face checks: %(score)s"
-msgstr "Score calculé après analyse des documents et du visage : %(score)s"
-
-msgid ""
-"Financial base (income, amount, term): %(base)s. Pipeline adjustment "
-"(face/liveness): %(adj)s. Total: %(score)s."
-msgstr ""
-"Base financière (revenu, montant, durée) : %(base)s. Ajustement pipeline "
-"(visage/vivacité) : %(adj)s. Total : %(score)s."
-
-msgid "Total eligibility score: %(score)s"
-msgstr "Score d’éligibilité total : %(score)s"
-
-msgid ""
-"Liveness: validates the guided session before upload. The percentage applies "
-"only to similarity between your ID photo and your face (recording or "
-"selfie), not to movements."
-msgstr ""
-"Vivacité : valide la session guidée avant envoi. Le pourcentage concerne "
-"uniquement la similarité entre la photo de votre pièce d’identité et votre "
-"visage (vidéo ou selfie), pas les mouvements."
-
-msgid "Liveness (session security)"
-msgstr "Vivacité (sécurité de session)"
-
-msgid ""
-"The recording is only sent after you complete the on-screen steps. This "
-"line confirms that the liveness session is accepted for your application."
-msgstr ""
-"L’enregistrement n’est envoyé qu’après les étapes à l’écran. Cette ligne "
-"confirme que la session de vivacité est acceptée pour votre demande."
-
-msgid ""
-"The liveness session could not be validated. Please start again and follow "
-"the steps until the end."
-msgstr ""
-"La session de vivacité n’a pas pu être validée. Recommencez et suivez les "
-"étapes jusqu’au bout."
-
-msgid ""
-"No liveness video was provided — only a static photo was compared to the ID. "
-"For a full check, add a liveness recording from the guided capture."
-msgstr ""
-"Aucune vidéo de vivacité : seule une photo statique a été comparée à la "
-"pièce d’identité. Pour un contrôle complet, ajoutez un enregistrement de "
-"vivacité via le parcours guidé."
-
-msgid "Similarity: ID photo vs face (DeepFace)"
-msgstr "Similarité : photo d’identité vs visage (DeepFace)"
-
-msgid ""
-"This percentage estimates how close the face in your recording (or selfie) is "
-"to the photo on your ID. It does not measure head movements or blinks — only "
-"facial similarity."
-msgstr ""
-"Ce pourcentage estime la proximité entre le visage dans votre enregistrement "
-"(ou selfie) et la photo sur votre pièce d’identité. Il ne mesure pas les "
-"mouvements de tête ni les clignements — uniquement la ressemblance faciale."
-
-msgid "Approximate similarity: about %(pct)s%%."
-msgstr "Similarité approximative : environ %(pct)s %%."
-
-msgid ""
-"Face crops are taken from your validated liveness video and compared to the "
-"ID photo."
-msgstr ""
-"Des extraits du visage sont pris dans votre vidéo de vivacité validée et "
-"comparés à la photo de la pièce d’identité."
-
-msgid "Comparison uses your uploaded selfie image against the ID photo."
-msgstr "La comparaison utilise votre selfie téléversé et la photo sur la pièce d’identité."
-
-msgid "Could not read the ID or face image file."
-msgstr "Impossible de lire le fichier de la pièce d’identité ou du visage."
-
-msgid "yes"
-msgstr "oui"
-
-msgid "no"
-msgstr "non"
-
-msgid ""
-"Guided session: the recording only uploads after you complete the on-screen "
-"steps. Independent server re-scan — left: %(l)s, right: %(r)s, blink: %(b)s "
-"(may differ from the browser for technical reasons)."
-msgstr ""
-"Session guidée : l’envoi n’a lieu qu’après les étapes à l’écran. Relecture "
-"serveur indépendante — gauche : %(l)s, droite : %(r)s, clignement : %(b)s "
-"(peut différer du navigateur pour des raisons techniques)."
-
-msgid ""
-"(Upload did not include client session attestation — re-record with the latest "
-"app.)"
-msgstr ""
-"(L’envoi ne comportait pas l’attestation de session — réenregistrez avec la "
-"dernière version de l’application.)"
-
-msgid ""
-"Overall liveness is accepted because the guided session completed before "
-"upload."
-msgstr ""
-"La vivacité est acceptée car la session guidée s’est terminée avant l’envoi."
-
-msgid "Could not read the ID or selfie file."
-msgstr "Impossible de lire le fichier de la pièce d’identité ou du selfie."
-
-msgid "DeepFace is not installed. Add optional dependencies (see requirements-ai.txt)."
-msgstr "DeepFace n’est pas installé. Ajoutez les dépendances optionnelles (voir requirements-ai.txt)."
-
-msgid "Eligibility score (pipeline)"
-msgstr "Score d’éligibilité (pipeline)"
-
-msgid "Face match (ID vs video or selfie)"
-msgstr "Correspondance visage (ID vs vidéo ou selfie)"
-
-msgid "Face vs ID (DeepFace)"
-msgstr "Visage vs pièce d’identité (DeepFace)"
-
-msgid "Head turn left: %(s)s — Head turn right: %(t)s — Blink: %(b)s"
-msgstr "Tête à gauche : %(s)s — Tête à droite : %(t)s — Clignement : %(b)s"
-
-msgid "Liveness (movements in the video)"
-msgstr "Vivacité (mouvements dans la vidéo)"
-
-msgid "Missing"
-msgstr "Manquant"
-
-msgid "No liveness video was available; only a static selfie was used."
-msgstr "Aucune vidéo de vivacité : seul un selfie statique a été utilisé."
-
-msgid "Upload a liveness video so we can check movement and blink."
-msgstr "Téléversez une vidéo de vivacité pour vérifier les mouvements et le clignement."
-
 msgid "API-first · AI-powered"
 msgstr "API-first · propulsé par l'IA"
 
@@ -213,9 +52,6 @@ msgstr "Demande introuvable."
 
 msgid "Application workspace"
 msgstr "Espace demande"
-
-msgid "Applications & users"
-msgstr "Demandes et utilisateurs"
 
 msgid "Approved"
 msgstr "Approuvé"
@@ -263,9 +99,6 @@ msgstr "Impossible d’accéder à la caméra."
 msgid "Could not create application. Ensure you are logged in."
 msgstr "Impossible de créer la demande. Vérifiez que vous êtes connecté."
 
-msgid "Could not reach the server. Check your connection and try again."
-msgstr "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
-
 msgid "Create your account"
 msgstr "Créer votre compte"
 
@@ -311,9 +144,6 @@ msgstr "Brouillon"
 
 msgid "Eligibility preview"
 msgstr "Aperçu d'éligibilité"
-
-msgid "Eligibility score:"
-msgstr "Score d'éligibilité :"
 
 msgid "Email"
 msgstr "E-mail"
@@ -470,20 +300,11 @@ msgstr ""
 msgid "LoanWise — users, applications, tokens"
 msgstr "LoanWise — utilisateurs, demandes, jetons"
 
-msgid "LoanWise admin"
-msgstr "Admin LoanWise"
-
-msgid "LoanWise administration"
-msgstr "Administration LoanWise"
-
 msgid "Log in"
 msgstr "Connexion"
 
 msgid "Log out"
 msgstr "Déconnexion"
-
-msgid "Loading face detection model…"
-msgstr "Chargement du modèle de détection du visage…"
 
 msgid ""
 "Look straight at the camera. Next, we will ask you to turn your head left, "
@@ -598,12 +419,6 @@ msgstr "Lancer le pipeline IA"
 
 msgid "Running document analysis and scoring…"
 msgstr "Analyse des documents et calcul du score…"
-
-msgid "The pipeline cannot run until these required documents are uploaded:"
-msgstr "Le pipeline ne peut pas s’exécuter tant que ces documents obligatoires ne sont pas téléversés :"
-
-msgid "Upload all required documents, then run the pipeline again."
-msgstr "Téléversez tous les documents requis, puis relancez le pipeline."
 
 msgid "Score"
 msgstr "Score"

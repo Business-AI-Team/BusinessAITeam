@@ -12,7 +12,7 @@ from typing import Any
 
 from django.conf import settings
 
-from core.models import ChatMessage, ChatRole, LoanApplication, LoanApplicationStatus
+from core.models import ChatMessage, ChatRole, LoanRequest, LoanRequestStatus
 from core.document_requirement_service import label_for, requirements_for_application
 from core.rag_eligibility import build_rag_hint_for_chat
 
@@ -87,10 +87,10 @@ def _llm_reply(
     return f"(Demo mode without LLM) Thanks for your message. {system_extra[:200]}…"
 
 
-def _persist(application: LoanApplication, role: str, content: str, step_hint: str = "", meta: dict | None = None):
+def _persist(application: LoanRequest, role: str, content: str, step_hint: str = "", meta: dict | None = None):
     role_value = getattr(role, "value", role)
     ChatMessage.objects.create(
-        application=application,
+        loan_request=application,
         role=role_value,
         content=content,
         step_hint=step_hint,
@@ -98,7 +98,7 @@ def _persist(application: LoanApplication, role: str, content: str, step_hint: s
     )
 
 
-def advance_simple_state(application: LoanApplication, user_message: str) -> str:
+def advance_simple_state(application: LoanRequest, user_message: str) -> str:
     """
     Deterministic step machine: interprets user input and returns assistant reply.
     Also syncs `application.current_step` and persists messages.
@@ -111,8 +111,8 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
 
     if step == "welcome":
         application.current_step = "loan_type"
-        application.status = LoanApplicationStatus.IN_PROGRESS
-        application.save(update_fields=["current_step", "status", "updated_at"])
+        application.status = LoanRequestStatus.PENDING
+        application.save(update_fields=["current_step", "status", "modification_date"])
         reply = (
             "Pour commencer, quel type de prêt souhaitez-vous ? (personnel, immobilier, professionnel)"
             if language.startswith("fr")
@@ -129,7 +129,7 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
             lt = "business"
         application.loan_type = lt
         application.current_step = "amount"
-        application.save(update_fields=["loan_type", "current_step", "updated_at"])
+        application.save(update_fields=["loan_type", "current_step", "modification_date"])
         reply = (
             "Quel montant souhaitez-vous emprunter (nombre en euros) ?"
             if language.startswith("fr")
@@ -148,7 +148,7 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
         except Exception:
             pass
         application.current_step = "income"
-        application.save(update_fields=["amount_requested", "current_step", "updated_at"])
+        application.save(update_fields=["amount_requested", "current_step", "modification_date"])
         reply = (
             "Quel est votre revenu annuel approximatif (EUR) ?"
             if language.startswith("fr")
@@ -167,7 +167,7 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
         except Exception:
             pass
         application.current_step = "purpose"
-        application.save(update_fields=["annual_income", "current_step", "updated_at"])
+        application.save(update_fields=["annual_income", "current_step", "modification_date"])
         reply = (
             "Décrivez brièvement l'objet du financement."
             if language.startswith("fr")
@@ -179,7 +179,7 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
     if step == "purpose":
         application.purpose = user_message[:2000]
         application.current_step = "documents"
-        application.save(update_fields=["purpose", "current_step", "updated_at"])
+        application.save(update_fields=["purpose", "current_step", "modification_date"])
         reqs = requirements_for_application(application)
         lines = [f"- {label_for(r, language)}" for r in reqs]
         req_text = "\n".join(lines) if lines else "-"
@@ -193,7 +193,7 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
 
     if step == "documents":
         application.current_step = "review"
-        application.save(update_fields=["current_step", "updated_at"])
+        application.save(update_fields=["current_step", "modification_date"])
         extra = "Résumé prêt prêt pour analyse." if language.startswith("fr") else "Loan summary ready for analysis."
         reply = _llm_reply(user_message, language, extra, application.loan_type or "personal")
         _persist(application, ChatRole.ASSISTANT, reply, "review")
@@ -201,7 +201,7 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
 
     if step == "review":
         application.current_step = "done"
-        application.save(update_fields=["current_step", "updated_at"])
+        application.save(update_fields=["current_step", "modification_date"])
         reply = _llm_reply(
             user_message,
             language,
@@ -223,7 +223,7 @@ def advance_simple_state(application: LoanApplication, user_message: str) -> str
     return reply
 
 
-def run_chat_turn(application: LoanApplication, user_message: str) -> str:
+def run_chat_turn(application: LoanRequest, user_message: str) -> str:
     """
     Public entry: optional LangGraph single-node graph; else in-process state machine.
     """
@@ -246,7 +246,7 @@ def _run_langgraph_turn(application, user_message, StateGraph, END) -> str:
         assistant_reply: str
 
     def agent_node(state: AgentState) -> AgentState:
-        app = LoanApplication.objects.get(pk=state["application_id"])
+        app = LoanRequest.objects.get(pk=state["application_id"])
         text = advance_simple_state(app, state["user_message"])
         return {**state, "assistant_reply": text}
 

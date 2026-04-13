@@ -4,19 +4,19 @@ UI helpers: derive pipeline progress (0–100) from persisted application state.
 
 from __future__ import annotations
 
-from core.models import LoanApplication, LoanApplicationStatus
+from core.models import LoanRequest, LoanRequestStatus
 
 
-def application_pipeline_progress_percent(application: LoanApplication) -> int:
+def application_pipeline_progress_percent(application: LoanRequest) -> int:
     """
     Approximate progress for the progress bar (matches chat/doc/orchestration reality).
 
-    100% only when scoring has run (eligibility_score set) or terminal workflow state.
+    100% only when scoring has run (score set) or terminal workflow state.
     """
-    if application.eligibility_score is not None:
+    if application.score is not None:
         return 100
     st = application.status
-    if st in (LoanApplicationStatus.APPROVED, LoanApplicationStatus.REJECTED):
+    if st in (LoanRequestStatus.VALIDATED, LoanRequestStatus.REJECTED):
         return 100
 
     n_msg = application.chat_messages.count()
@@ -29,7 +29,7 @@ def application_pipeline_progress_percent(application: LoanApplication) -> int:
     step = application.current_step or ""
     if step in ("review", "done"):
         p = max(p, 78)
-    if st == LoanApplicationStatus.UNDER_REVIEW:
+    if st == LoanRequestStatus.PENDING:
         p = max(p, 92)
 
     return min(99, p)

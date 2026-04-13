@@ -14,10 +14,10 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from core.models import LoanApplication
+from core.models import LoanRequest
 
 
-def build_application_pdf(application: LoanApplication) -> bytes:
+def build_application_pdf(application: LoanRequest) -> bytes:
     """Return PDF bytes for the given application (language-aware labels)."""
     language = application.language or "fr"
     previous = translation.get_language()
@@ -59,7 +59,7 @@ def build_application_pdf(application: LoanApplication) -> bytes:
         ["Amount", str(application.amount_requested)],
         ["Term (months)", str(application.term_months)],
         ["Annual income", str(application.annual_income)],
-        ["Eligibility score", str(application.eligibility_score or "-")],
+        ["Eligibility score", str(application.score or "-")],
     ]
     if roi:
         for k, v in roi.items():

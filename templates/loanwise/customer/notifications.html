@@ -1,0 +1,45 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Notifications" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl animate-fade-in-up space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <a href="{% url 'customer_dashboard' %}" class="text-sm text-sky-600 hover:underline dark:text-sky-400">← {% trans "Dashboard" %}</a>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{% trans "Notifications" %}</h1>
+    </div>
+  </div>
+
+  {% if not notifications %}
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
+    <p class="text-3xl">🔔</p>
+    <p class="mt-3 text-slate-600 dark:text-slate-300">{% trans "No notifications yet." %}</p>
+  </div>
+  {% else %}
+  <div class="space-y-3">
+    {% for item in notifications %}
+    <a href="{% url 'loan_request_detail' item.loan_request.pk %}"
+       class="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm transition hover:border-sky-300 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-sky-600">
+      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl
+        {% if item.loan_request.status == 'validated' %}bg-emerald-100 dark:bg-emerald-900/40
+        {% elif item.loan_request.status == 'rejected' %}bg-red-100 dark:bg-red-900/40
+        {% else %}bg-amber-100 dark:bg-amber-900/40{% endif %}">
+        {% if item.loan_request.status == 'validated' %}✅{% elif item.loan_request.status == 'rejected' %}❌{% else %}📋{% endif %}
+      </div>
+      <div class="flex-1">
+        <p class="font-medium text-slate-900 dark:text-white">
+          {% trans "Loan request" %} {{ item.loan_request.reference }}
+        </p>
+        <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          {% trans "Status:" %} <strong>{{ item.loan_request.get_status_display }}</strong>
+          · {{ item.notification.date|date:"d/m/Y H:i" }}
+        </p>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
