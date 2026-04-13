@@ -71,7 +71,7 @@ FR = {
     "generic": "générique",
     "face_selfie": "selfie visage",
     "identity": "identité",
-    "Upload": "Envoyer",
+    "Upload": "Téléverser",
     "Uploading…": "Envoi…",
     "ROI & impact": "ROI & impact",
     "Principal": "Capital",
@@ -237,6 +237,40 @@ FR = {
     ),
     "Running document analysis and scoring…": "Analyse des documents et calcul du score…",
     "Admin": "Admin",
+    # back-office nav & customer nav
+    "Back-Office": "Arrière-guichet",
+    "Requests": "Demandes",
+    "Conditions": "Conditions",
+    "Requirements": "Exigences",
+    "Agents": "Agents",
+    "My requests": "Mes demandes",
+    "New request": "Nouvelle demande",
+    "Notifications": "Notifications",
+    # eligibility conditions page
+    "Eligibility criteria": "Critères d'éligibilité",
+    "Upload PDF policy documents from the bank. Text is extracted and used to guide loan eligibility for applicants.": (
+        "Téléversez des documents de politique bancaire au format PDF. Le texte est "
+        "extrait et sert à orienter l'éligibilité des demandeurs de prêt."
+    ),
+    "Add PDF document": "Ajouter un document PDF",
+    "PDF file": "Fichier PDF",
+    "Choose file": "Choisir un fichier",
+    "No file chosen": "Aucun fichier sélectionné",
+    "Uploaded criteria": "Critères téléversés",
+    "No eligibility PDFs yet. Upload a bank policy document above.": (
+        "Aucun PDF de critères pour l'instant. Téléversez un document de politique "
+        "bancaire ci-dessus."
+    ),
+    "File": "Fichier",
+    "Indexed": "Indexé",
+    "Actions": "Actions",
+    "Open file": "Ouvrir le fichier",
+    "Delete": "Supprimer",
+    "Delete this document?": "Supprimer ce document ?",
+    "Please choose a PDF file to upload.": "Veuillez choisir un fichier PDF à téléverser.",
+    "Only PDF files are accepted.": "Seuls les fichiers PDF sont acceptés.",
+    "Criteria document added and indexed.": "Document de critères ajouté et indexé.",
+    "Criteria document deleted.": "Document de critères supprimé.",
     "Staff: use the administration panel to manage users, loan applications, and API tokens.": (
         "Staff : utilisez l'espace d'administration pour gérer les utilisateurs, les demandes de prêt et les jetons API."
     ),
@@ -247,29 +281,33 @@ FR = {
 
 
 def write_catalog(lang: str, fr_map: dict[str, str]) -> None:
-    po = polib.POFile()
-    po.metadata = {
-        "Project-Id-Version": "LoanWise 1.0",
-        "Report-Msgid-Bugs-To": "",
-        "POT-Creation-Date": "",
-        "PO-Revision-Date": "",
-        "Last-Translator": "",
-        "Language-Team": "",
-        "Language": "fr" if lang == "fr" else "en",
-        "MIME-Version": "1.0",
-        "Content-Type": "text/plain; charset=utf-8",
-        "Content-Transfer-Encoding": "8bit",
-    }
-    for msgid in sorted(fr_map.keys(), key=str.lower):
-        if lang == "fr":
-            entry = polib.POEntry(msgid=msgid, msgstr=fr_map[msgid])
-        else:
-            entry = polib.POEntry(msgid=msgid, msgstr=msgid)
-        po.append(entry)
     out_dir = BASE / "locale" / lang / "LC_MESSAGES"
     out_dir.mkdir(parents=True, exist_ok=True)
     po_path = out_dir / "django.po"
     mo_path = out_dir / "django.mo"
+    if po_path.exists():
+        po = polib.pofile(str(po_path))
+    else:
+        po = polib.POFile()
+        po.metadata = {
+            "Project-Id-Version": "LoanWise 1.0",
+            "Report-Msgid-Bugs-To": "",
+            "POT-Creation-Date": "",
+            "PO-Revision-Date": "",
+            "Last-Translator": "",
+            "Language-Team": "",
+            "Language": "fr" if lang == "fr" else "en",
+            "MIME-Version": "1.0",
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Transfer-Encoding": "8bit",
+        }
+    for msgid, fr_text in fr_map.items():
+        msgstr = fr_text if lang == "fr" else msgid
+        entry = po.find(msgid)
+        if entry:
+            entry.msgstr = msgstr
+        else:
+            po.append(polib.POEntry(msgid=msgid, msgstr=msgstr))
     po.save(str(po_path))
     po.save_as_mofile(str(mo_path))
     print(f"Wrote {po_path} and {mo_path}")
