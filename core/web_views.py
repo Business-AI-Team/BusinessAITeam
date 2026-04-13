@@ -31,6 +31,7 @@ from core.models import (
     Document,
     DocumentRequirement,
     DocumentType,
+
     LoanRequest,
     LoanRequestStatus,
     LoanType,
