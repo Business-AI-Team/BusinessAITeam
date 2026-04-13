@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from core.models import ApplicationDocument, ChatMessage, DocumentRequirement, LoanApplication
+from core.models import Document, ChatMessage, DocumentRequirement, LoanRequest
 
 User = get_user_model()
 
@@ -76,9 +76,9 @@ class DocumentRequirementSerializer(serializers.ModelSerializer):
         return obj.description_fr if lang.startswith("fr") else obj.description_en
 
 
-class LoanApplicationSerializer(serializers.ModelSerializer):
+class LoanRequestSerializer(serializers.ModelSerializer):
     class Meta:
-        model = LoanApplication
+        model = LoanRequest
         fields = (
             "id",
             "reference",
@@ -90,37 +90,41 @@ class LoanApplicationSerializer(serializers.ModelSerializer):
             "annual_income",
             "purpose",
             "current_step",
-            "eligibility_score",
+            "score",
             "roi_summary",
             "business_impact",
             "face_verification",
             "liveness_verification",
             "orchestration_log",
-            "created_at",
-            "updated_at",
+            "creation_date",
+            "modification_date",
             "submitted_at",
         )
         read_only_fields = (
             "id",
             "reference",
             "status",
-            "eligibility_score",
+            "score",
             "roi_summary",
             "business_impact",
             "face_verification",
             "liveness_verification",
             "orchestration_log",
-            "created_at",
-            "updated_at",
+            "creation_date",
+            "modification_date",
             "submitted_at",
         )
 
 
-class LoanApplicationWriteSerializer(serializers.ModelSerializer):
-    """Create/update loan application from API."""
+# Backward-compat alias
+LoanApplicationSerializer = LoanRequestSerializer
+
+
+class LoanRequestWriteSerializer(serializers.ModelSerializer):
+    """Create/update loan request from API."""
 
     class Meta:
-        model = LoanApplication
+        model = LoanRequest
         fields = (
             "loan_type",
             "language",
@@ -137,13 +141,17 @@ class LoanApplicationWriteSerializer(serializers.ModelSerializer):
         return value
 
 
-class ApplicationDocumentSerializer(serializers.ModelSerializer):
+# Backward-compat alias
+LoanApplicationWriteSerializer = LoanRequestWriteSerializer
+
+
+class DocumentSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ApplicationDocument
+        model = Document
         fields = (
             "id",
             "requirement",
-            "kind",
+            "document_type",
             "original_filename",
             "content_type",
             "sha256_hex",
@@ -153,6 +161,10 @@ class ApplicationDocumentSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+# Backward-compat alias
+ApplicationDocumentSerializer = DocumentSerializer
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):

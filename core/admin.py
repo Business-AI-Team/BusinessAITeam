@@ -15,13 +15,15 @@ from rest_framework.authtoken.models import Token
 from django.utils import timezone
 
 from core.models import (
-    ApplicationDocument,
+    Account,
+    BackOffice,
     ChatMessage,
+    Customer,
+    Document,
     DocumentRequirement,
     EmailVerificationToken,
-    EligibilityKnowledgeSource,
-    LoanApplication,
-    User,
+    EligibilityCondition,
+    LoanRequest,
 )
 from core.rag_eligibility import (
     delete_eligibility_source_index,
@@ -29,14 +31,17 @@ from core.rag_eligibility import (
     index_eligibility_source,
 )
 
+# Keep backward-compat name for rag_eligibility calls
+EligibilityKnowledgeSource = EligibilityCondition
+
 admin.site.site_header = _("LoanWise administration")
 admin.site.site_title = _("LoanWise admin")
 admin.site.index_title = _("Applications & users")
 
 
-@admin.register(User)
-class UserAdmin(BaseUserAdmin):
-    """Liste + fiche utilisateur : suppression possible (action ou bouton « Supprimer »)."""
+@admin.register(Account)
+class AccountAdmin(BaseUserAdmin):
+    """Liste + fiche compte : suppression possible (action ou bouton « Supprimer »)."""
 
     ordering = ("-date_joined",)
     list_per_page = 50
@@ -103,19 +108,31 @@ class TokenAdmin(admin.ModelAdmin):
     ordering = ("-created",)
 
 
-@admin.register(LoanApplication)
-class LoanApplicationAdmin(admin.ModelAdmin):
-    list_display = ("reference", "user", "loan_type", "status", "eligibility_score", "created_at")
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ("first_name", "last_name", "email", "phone", "id_card")
+    search_fields = ("first_name", "last_name", "email", "id_card")
+
+
+@admin.register(BackOffice)
+class BackOfficeAdmin(admin.ModelAdmin):
+    list_display = ("first_name", "last_name", "email", "cin_number")
+    search_fields = ("first_name", "last_name", "email", "cin_number")
+
+
+@admin.register(LoanRequest)
+class LoanRequestAdmin(admin.ModelAdmin):
+    list_display = ("reference", "account", "loan_type", "status", "score", "creation_date")
     list_filter = ("status", "loan_type")
-    search_fields = ("reference", "user__email")
-    raw_id_fields = ("user",)
-    date_hierarchy = "created_at"
+    search_fields = ("reference", "account__email")
+    raw_id_fields = ("account",)
+    date_hierarchy = "creation_date"
 
 
-@admin.register(ApplicationDocument)
-class ApplicationDocumentAdmin(admin.ModelAdmin):
-    list_display = ("original_filename", "application", "sha256_hex", "analyzed_at", "deleted_at")
-    raw_id_fields = ("application", "requirement")
+@admin.register(Document)
+class DocumentAdmin(admin.ModelAdmin):
+    list_display = ("original_filename", "loan_request", "sha256_hex", "analyzed_at", "deleted_at")
+    raw_id_fields = ("loan_request", "requirement")
 
 
 @admin.register(DocumentRequirement)
@@ -127,9 +144,9 @@ class DocumentRequirementAdmin(admin.ModelAdmin):
 
 @admin.register(ChatMessage)
 class ChatMessageAdmin(admin.ModelAdmin):
-    list_display = ("application", "role", "created_at")
+    list_display = ("loan_request", "role", "created_at")
     list_filter = ("role",)
-    raw_id_fields = ("application",)
+    raw_id_fields = ("loan_request",)
     search_fields = ("content",)
 
 
@@ -140,8 +157,8 @@ class EmailVerificationTokenAdmin(admin.ModelAdmin):
     search_fields = ("token", "code", "user__email")
 
 
-@admin.register(EligibilityKnowledgeSource)
-class EligibilityKnowledgeSourceAdmin(admin.ModelAdmin):
+@admin.register(EligibilityCondition)
+class EligibilityConditionAdmin(admin.ModelAdmin):
     """
     PDF / images (JPEG, PNG, WebP) + optional manual text → extracted, chunked, indexed for RAG.
     """
@@ -160,12 +177,12 @@ class EligibilityKnowledgeSourceAdmin(admin.ModelAdmin):
         re_extract = not change or "file" in form.changed_data
         if re_extract and obj.file:
             extracted = extract_text_from_file(obj.file.path)
-            EligibilityKnowledgeSource.objects.filter(pk=obj.pk).update(extracted_text=extracted)
+            EligibilityCondition.objects.filter(pk=obj.pk).update(extracted_text=extracted)
             obj.refresh_from_db()
         full = obj.searchable_blob()
         if obj.is_active and full.strip():
             index_eligibility_source(obj.pk, obj.title or "", full)
-            EligibilityKnowledgeSource.objects.filter(pk=obj.pk).update(last_indexed_at=timezone.now())
+            EligibilityCondition.objects.filter(pk=obj.pk).update(last_indexed_at=timezone.now())
         else:
             delete_eligibility_source_index(obj.pk)
 

@@ -1,56 +1,81 @@
 {% extends "loanwise/base.html" %}
 {% load i18n %}
 
-{% block title %}{% trans "Sign up" %} — {{ block.super }}{% endblock %}
+{% block title %}{% trans "Create your account" %} — {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-md animate-fade-in-up rounded-2xl border border-slate-200 bg-white/90 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900/90">
-  <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{% trans "Create your account" %}</h1>
-  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{% trans "We will send a six-digit verification code to your email." %}</p>
-  <form method="post" class="mt-8 space-y-4">
-    {% csrf_token %}
-    <div>
-      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Email" %}</label>
-      <input name="email" type="email" required
-             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+<div class="mx-auto max-w-lg animate-fade-in-up">
+  <div class="rounded-2xl border border-slate-200 bg-white/90 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900/90">
+    <div class="mb-6 text-center">
+      <span class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-2xl dark:bg-sky-900/40">👤</span>
+      <h1 class="mt-3 text-2xl font-bold text-slate-900 dark:text-white">{% trans "Create your Customer account" %}</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "Fill in your details to get started." %}</p>
     </div>
-    <div>
-      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Username" %}</label>
-      <input name="username" type="text"
-             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+
+    {% if messages %}
+    <div class="mb-4 space-y-2">
+      {% for msg in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm {% if msg.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300{% else %}bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300{% endif %}">
+        {{ msg }}
+      </div>
+      {% endfor %}
     </div>
-    <div class="grid grid-cols-2 gap-3">
-      <div>
-        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "First name" %}</label>
-        <input name="first_name" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+    {% endif %}
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "First name" %}</label>
+          <input name="first_name" type="text" value="{{ form_data.first_name|default:'' }}"
+                 class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-950">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Last name" %}</label>
+          <input name="last_name" type="text" value="{{ form_data.last_name|default:'' }}"
+                 class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-950">
+        </div>
       </div>
       <div>
-        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Last name" %}</label>
-        <input name="last_name" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Email" %} <span class="text-red-500">*</span></label>
+        <input name="email" type="email" required value="{{ form_data.email|default:'' }}"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-950">
       </div>
-    </div>
-    <div>
-      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Password" %}</label>
-      <input name="password" type="password" required minlength="8"
-             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-    </div>
-    <div>
-      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Preferred language" %}</label>
-      <select name="preferred_language" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-        <option value="fr">Français</option>
-        <option value="en">English</option>
-      </select>
-    </div>
-    <button type="submit" class="w-full rounded-xl bg-sky-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500">
-      {% trans "Sign up" %}
-    </button>
-  </form>
-  <p class="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
-    <a href="{% url 'verify_email_page' %}" class="font-semibold text-sky-600 hover:underline dark:text-sky-400">{% trans "Enter verification code" %}</a>
-  </p>
-  <p class="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
-    {% trans "Already have an account?" %}
-    <a href="{% url 'login_page' %}" class="font-semibold text-sky-600 hover:underline dark:text-sky-400">{% trans "Log in" %}</a>
-  </p>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Phone number" %}</label>
+        <input name="phone" type="tel" value="{{ form_data.phone|default:'' }}"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Address" %}</label>
+        <textarea name="address" rows="2"
+                  class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-950">{{ form_data.address|default:'' }}</textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Password" %} <span class="text-red-500">*</span></label>
+        <input name="password" type="password" required minlength="8"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Confirm password" %} <span class="text-red-500">*</span></label>
+        <input name="password2" type="password" required minlength="8"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Preferred language" %}</label>
+        <select name="preferred_language" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950">
+          <option value="fr" {% if form_data.preferred_language == 'fr' or not form_data %}selected{% endif %}>Français</option>
+          <option value="en" {% if form_data.preferred_language == 'en' %}selected{% endif %}>English</option>
+        </select>
+      </div>
+      <button type="submit" class="w-full rounded-xl bg-sky-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500 transition">
+        {% trans "Create account" %}
+      </button>
+    </form>
+    <p class="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
+      {% trans "Already have an account?" %}
+      <a href="{% url 'login_page' %}" class="font-semibold text-sky-600 hover:underline dark:text-sky-400">{% trans "Log in" %}</a>
+    </p>
+  </div>
 </div>
 {% endblock %}

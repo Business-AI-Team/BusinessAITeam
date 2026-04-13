@@ -1,0 +1,142 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Back-Office Agents" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-6" x-data="{ showForm: false, editId: null }">
+
+  <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div>
+      <a href="{% url 'backoffice_dashboard' %}" class="text-sm text-sky-600 hover:underline dark:text-sky-400">← {% trans "Dashboard" %}</a>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{% trans "Back-Office Agents" %}</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        {% trans "Manage agent accounts. Data is also persisted to:" %}
+        <code class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{{ agents_file }}</code>
+      </p>
+    </div>
+    <button @click="showForm = !showForm; editId = null"
+            class="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-500">
+      + {% trans "Add agent" %}
+    </button>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for msg in messages %}
+    <div class="rounded-xl px-4 py-3 text-sm {% if msg.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Create form #}
+  <div x-show="showForm && editId === null" x-cloak
+       class="rounded-2xl border border-sky-200 bg-sky-50/80 p-6 dark:border-sky-800 dark:bg-sky-900/20">
+    <h2 class="mb-4 font-semibold text-slate-900 dark:text-white">{% trans "New Back-Office Agent" %}</h2>
+    <form method="post" class="grid gap-4 sm:grid-cols-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "First name" %}</label>
+        <input name="first_name" type="text"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Last name" %}</label>
+        <input name="last_name" type="text"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Email" %} <span class="text-red-500">*</span></label>
+        <input name="email" type="email" required
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "CIN number" %}</label>
+        <input name="cin_number" type="text"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Password" %} <span class="text-red-500">*</span></label>
+        <input name="password" type="password" required minlength="8"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div class="sm:col-span-2 flex gap-3">
+        <button type="submit" class="rounded-xl bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-500">{% trans "Create" %}</button>
+        <button type="button" @click="showForm = false" class="rounded-xl border border-slate-200 px-5 py-2 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">{% trans "Cancel" %}</button>
+      </div>
+    </form>
+  </div>
+
+  {# Agents list #}
+  {% if agents %}
+  <div class="grid gap-4">
+    {% for agent in agents %}
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/80"
+         x-data="{ editing: false }">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 font-bold dark:bg-amber-900/40 dark:text-amber-300">
+            {{ agent.first_name|first|upper }}{{ agent.last_name|first|upper }}
+          </div>
+          <div>
+            <p class="font-semibold text-slate-900 dark:text-white">{{ agent.first_name }} {{ agent.last_name }}</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ agent.email }}</p>
+            {% if agent.back_office and agent.back_office.cin_number %}
+            <p class="text-xs text-slate-400 dark:text-slate-500">CIN: {{ agent.back_office.cin_number }}</p>
+            {% endif %}
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button @click="editing = !editing"
+                  class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">
+            {% trans "Edit" %}
+          </button>
+          {% if agent.pk != request.user.pk %}
+          <form method="post" class="inline" onsubmit="return confirm('{% trans "Delete this agent?" %}')">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="agent_id" value="{{ agent.pk }}">
+            <button type="submit" class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300">{% trans "Delete" %}</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Edit form #}
+      <div x-show="editing" x-cloak class="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+        <form method="post" class="grid gap-3 sm:grid-cols-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update">
+          <input type="hidden" name="agent_id" value="{{ agent.pk }}">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "First name" %}</label>
+            <input name="first_name" type="text" value="{{ agent.first_name }}"
+                   class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Last name" %}</label>
+            <input name="last_name" type="text" value="{{ agent.last_name }}"
+                   class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "New password (leave blank to keep current)" %}</label>
+            <input name="new_password" type="password" minlength="8"
+                   class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+          <div class="sm:col-span-2 flex gap-2">
+            <button type="submit" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500">{% trans "Save" %}</button>
+            <button type="button" @click="editing = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">{% trans "Cancel" %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="rounded-2xl border border-dashed border-slate-300 p-12 text-center dark:border-slate-700">
+    <p class="text-slate-500 dark:text-slate-400">{% trans "No Back-Office agents yet." %}</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

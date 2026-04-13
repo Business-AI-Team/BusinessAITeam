@@ -11,10 +11,10 @@ from typing import Any
 
 from django.conf import settings
 
-from core.models import LoanApplication
+from core.models import LoanRequest
 
 
-def _financial_base_score(application: LoanApplication) -> Decimal:
+def _financial_base_score(application: LoanRequest) -> Decimal:
     """
     Debt-to-income style score 0–100 from declared income, amount, term (deterministic).
 
@@ -39,7 +39,7 @@ def _financial_base_score(application: LoanApplication) -> Decimal:
     return score.quantize(Decimal("0.01"))
 
 
-def _verification_adjustment(application: LoanApplication) -> Decimal:
+def _verification_adjustment(application: LoanRequest) -> Decimal:
     """
     Bonus/malus from face + liveness JSON (after pipeline). Zero if no verification data.
 
@@ -82,7 +82,7 @@ def _verification_adjustment(application: LoanApplication) -> Decimal:
     return delta.quantize(Decimal("0.01"))
 
 
-def compute_eligibility_score(application: LoanApplication) -> Decimal:
+def compute_eligibility_score(application: LoanRequest) -> Decimal:
     """
     Final 0–100 score = financial base + verification adjustment.
 
@@ -96,7 +96,7 @@ def compute_eligibility_score(application: LoanApplication) -> Decimal:
     return total.quantize(Decimal("0.01"))
 
 
-def compute_roi_and_impact(application: LoanApplication) -> tuple[dict[str, Any], dict[str, Any]]:
+def compute_roi_and_impact(application: LoanRequest) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Build ROI summary and business impact dicts for dashboard and PDF.
 
@@ -146,19 +146,20 @@ def compute_roi_and_impact(application: LoanApplication) -> tuple[dict[str, Any]
     return roi_summary, business_impact
 
 
-def run_eligibility_for_application(application: LoanApplication) -> LoanApplication:
-    """Persist score, ROI, and impact on the application row."""
-    score = compute_eligibility_score(application)
+def run_eligibility_for_application(application: LoanRequest) -> LoanRequest:
+    """Persist score (0.0–1.0), ROI, and impact on the loan request row."""
+    raw_score = compute_eligibility_score(application)
+    # Convert 0–100 Decimal to 0.0–1.0 float as per ERD Score field
+    application.score = float(raw_score) / 100.0
     roi, impact = compute_roi_and_impact(application)
-    application.eligibility_score = score
     application.roi_summary = roi
     application.business_impact = impact
     application.save(
         update_fields=[
-            "eligibility_score",
+            "score",
             "roi_summary",
             "business_impact",
-            "updated_at",
+            "modification_date",
         ]
     )
     return application

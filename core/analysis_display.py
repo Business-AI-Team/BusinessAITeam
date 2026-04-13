@@ -13,10 +13,10 @@ from typing import Any
 from django.utils.translation import gettext as _
 
 from core.face_verification import deepface_distance_to_similarity_percent
-from core.models import LoanApplication, LoanApplicationStatus
+from core.models import LoanRequest, LoanRequestStatus
 
 
-def analysis_rows_for_template(app: LoanApplication) -> list[dict[str, Any]]:
+def analysis_rows_for_template(app: LoanRequest) -> list[dict[str, Any]]:
     """Build rows for the « Analysis results » card (server-rendered). Order: liveness → face match % → eligibility."""
     fv = app.face_verification or {}
     lv = app.liveness_verification or {}
@@ -106,7 +106,7 @@ def analysis_rows_for_template(app: LoanApplication) -> list[dict[str, Any]]:
         )
 
     # --- 3) Eligibility (financial + pipeline adjustment) ---
-    if app.eligibility_score is not None:
+    if app.score is not None:
         roi = app.roi_summary or {}
         base_s = roi.get("eligibility_financial_base")
         adj_s = roi.get("eligibility_verification_adjustment")
@@ -114,13 +114,13 @@ def analysis_rows_for_template(app: LoanApplication) -> list[dict[str, Any]]:
             detail = _(
                 "Financial base (income, amount, term): %(base)s. "
                 "Pipeline adjustment (face/liveness): %(adj)s. Total: %(score)s."
-            ) % {"base": base_s, "adj": adj_s, "score": app.eligibility_score}
+            ) % {"base": base_s, "adj": adj_s, "score": app.score}
         else:
-            detail = _("Total eligibility score: %(score)s") % {"score": app.eligibility_score}
+            detail = _("Total eligibility score: %(score)s") % {"score": app.score}
         rows.append(
             {
                 "title": _("Eligibility score (pipeline)"),
-                "ok": app.status == LoanApplicationStatus.APPROVED,
+                "ok": app.status == LoanRequestStatus.VALIDATED,
                 "detail": detail,
                 "percent": None,
             }

@@ -1,0 +1,185 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Back-Office Dashboard" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-8">
+
+  {# Header #}
+  <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-400">{% trans "Back-Office" %}</p>
+      <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{% trans "Dashboard" %}</h1>
+      <p class="mt-1 text-slate-500 dark:text-slate-400">{% trans "Overview of all loan requests." %}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'backoffice_loan_requests' %}" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500">{% trans "All requests" %}</a>
+      <a href="{% url 'backoffice_document_requirements' %}" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">{% trans "Requirements" %}</a>
+      <a href="{% url 'backoffice_agents' %}" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">{% trans "Agents" %}</a>
+    </div>
+  </div>
+
+  {# KPIs #}
+  <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-3xl font-black text-slate-900 dark:text-white">{{ total }}</p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "Total requests" %}</p>
+    </div>
+    <div class="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 dark:border-amber-800 dark:bg-amber-900/20">
+      <p class="text-3xl font-black text-amber-700 dark:text-amber-300">{{ pending }}</p>
+      <p class="mt-1 text-sm text-amber-600 dark:text-amber-400">{% trans "Pending" %}</p>
+    </div>
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 dark:border-emerald-800 dark:bg-emerald-900/20">
+      <p class="text-3xl font-black text-emerald-700 dark:text-emerald-300">{{ validated }}</p>
+      <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">{% trans "Validated" %}</p>
+    </div>
+    <div class="rounded-2xl border border-red-200 bg-red-50/80 p-5 dark:border-red-800 dark:bg-red-900/20">
+      <p class="text-3xl font-black text-red-700 dark:text-red-300">{{ rejected }}</p>
+      <p class="mt-1 text-sm text-red-600 dark:text-red-400">{% trans "Rejected" %}</p>
+    </div>
+  </div>
+
+  {# Filters #}
+  <form method="get" action=""
+        class="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+    <div class="flex flex-wrap items-end gap-3">
+
+      {# Status #}
+      <div class="flex flex-col gap-1">
+        <label for="bo-filter-status" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Status" %}</label>
+        <select id="bo-filter-status" name="status"
+                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          <option value="">{% trans "All" %}</option>
+          {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if f_status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# Customer #}
+      <div class="flex flex-col gap-1">
+        <label for="bo-filter-customer" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Customer" %}</label>
+        <input id="bo-filter-customer" type="text" name="customer" value="{{ f_customer }}"
+               placeholder="{% trans 'Name or email…' %}"
+               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:placeholder-slate-500">
+      </div>
+
+      {# Loan type #}
+      <div class="flex flex-col gap-1">
+        <label for="bo-filter-type" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Type" %}</label>
+        <select id="bo-filter-type" name="loan_type"
+                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          <option value="">{% trans "All" %}</option>
+          {% for val, label in type_choices %}
+          <option value="{{ val }}" {% if f_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# Date from #}
+      <div class="flex flex-col gap-1">
+        <label for="bo-filter-date-from" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "From" %}</label>
+        <input id="bo-filter-date-from" type="date" name="date_from" value="{{ f_date_from }}"
+               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+      </div>
+
+      {# Date to #}
+      <div class="flex flex-col gap-1">
+        <label for="bo-filter-date-to" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "To" %}</label>
+        <input id="bo-filter-date-to" type="date" name="date_to" value="{{ f_date_to }}"
+               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+      </div>
+
+      {# Apply #}
+      <button type="submit"
+              class="rounded-lg bg-sky-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-sky-500">
+        {% trans "Apply" %}
+      </button>
+
+      {# Reset #}
+      {% if f_status or f_customer or f_type or f_date_from or f_date_to %}
+      <a href="?"
+         class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+        ↺ {% trans "Reset" %}
+      </a>
+      {% endif %}
+
+    </div>
+  </form>
+
+  {# Requests table #}
+  <div>
+    <div class="mb-3 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-900 dark:text-white">
+        {% trans "Loan requests" %}
+        <span class="ml-2 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          {{ filtered_count }}
+        </span>
+      </h2>
+    </div>
+
+    {% if recent_requests %}
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+          <thead class="bg-slate-50 dark:bg-slate-800/60">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Reference" %}</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Customer" %}</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Type" %}</th>
+              <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Amount" %}</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Status" %}</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Date" %}</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for lr in recent_requests %}
+            <tr class="group transition hover:bg-sky-50/40 dark:hover:bg-sky-900/10">
+              <td class="whitespace-nowrap px-4 py-3">
+                <span class="font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">{{ lr.reference }}</span>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-slate-700 dark:text-slate-300">
+                {% if lr.customer %}{{ lr.customer.first_name }} {{ lr.customer.last_name }}{% else %}{{ lr.account.email }}{% endif %}
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-slate-600 dark:text-slate-400">{{ lr.get_loan_type_display }}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ lr.amount_requested|floatformat:0 }} €</td>
+              <td class="whitespace-nowrap px-4 py-3 text-center">
+                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold
+                  {% if lr.status == 'pending' %}bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200
+                  {% elif lr.status == 'validated' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200
+                  {% elif lr.status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200
+                  {% elif lr.status == 'canceled' %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300
+                  {% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                  {{ lr.get_status_display }}
+                </span>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">{{ lr.creation_date|date:"d/m/Y" }}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-right">
+                <a href="{% url 'backoffice_loan_request_detail' lr.pk %}"
+                   class="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-400 hover:text-sky-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-sky-500 dark:hover:text-sky-400">
+                  {% trans "View" %} →
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if filtered_count > 50 %}
+      <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+        {% trans "Showing first 50 of" %} {{ filtered_count }} {% trans "results. Use filters to narrow down." %}
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
+      <p class="text-3xl">🔍</p>
+      <p class="mt-3 font-medium text-slate-600 dark:text-slate-300">{% trans "No requests match the current filters." %}</p>
+      <a href="?" class="mt-3 inline-block text-sm text-sky-600 hover:underline dark:text-sky-400">{% trans "Clear filters" %}</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

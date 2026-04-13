@@ -1,0 +1,263 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "My Dashboard" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-8">
+
+  {# Header #}
+  <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-widest text-sky-600 dark:text-sky-400">
+        {{ request.user.first_name }} {{ request.user.last_name }}
+      </p>
+      <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+        {% trans "My Loan Requests" %}
+      </h1>
+      <p class="mt-1 text-slate-500 dark:text-slate-400">
+        {% trans "Track your applications and their status." %}
+      </p>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if unread_count %}
+      <a href="{% url 'notifications_page' %}"
+         class="relative inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+        🔔 {% trans "Notifications" %}
+        <span class="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">{{ unread_count }}</span>
+      </a>
+      {% else %}
+      <a href="{% url 'notifications_page' %}"
+         class="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+        🔔 {% trans "Notifications" %}
+      </a>
+      {% endif %}
+      <a href="{% url 'loan_request_new' %}"
+         class="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500 transition">
+        + {% trans "New request" %}
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for msg in messages %}
+    <div class="rounded-xl px-4 py-3 text-sm {% if msg.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Status summary #}
+  {% if loan_requests %}
+  <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    {% for status, label in statuses %}
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 text-center dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-2xl font-bold text-slate-900 dark:text-white">
+        {{ loan_requests|length }}
+      </p>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{% trans "Total" %}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Filters #}
+  {% if loan_requests %}
+  <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="flex flex-col gap-1">
+        <label for="filter-status" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Status" %}</label>
+        <select id="filter-status"
+                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          <option value="">{% trans "All" %}</option>
+          <option value="pending">⏳ {% trans "Pending" %}</option>
+          <option value="validated">✅ {% trans "Validated" %}</option>
+          <option value="rejected">❌ {% trans "Rejected" %}</option>
+          <option value="canceled">🚫 {% trans "Canceled" %}</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label for="filter-type" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Type" %}</label>
+        <select id="filter-type"
+                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          <option value="">{% trans "All" %}</option>
+          {% for lr in loan_requests %}
+          <option value="{{ lr.loan_type }}">{{ lr.get_loan_type_display }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label for="filter-date-from" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "From" %}</label>
+        <input type="date" id="filter-date-from"
+               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+      </div>
+      <div class="flex flex-col gap-1">
+        <label for="filter-date-to" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "To" %}</label>
+        <input type="date" id="filter-date-to"
+               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+      </div>
+      <button id="filter-reset"
+              class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+        ↺ {% trans "Reset" %}
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Loan requests list #}
+  {% if not loan_requests %}
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-16 text-center dark:border-slate-700 dark:bg-slate-900/40">
+    <p class="text-4xl">📋</p>
+    <p class="mt-3 font-medium text-slate-700 dark:text-slate-200">{% trans "No loan requests yet." %}</p>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "Start your first loan request to get an eligibility check." %}</p>
+    <a href="{% url 'loan_request_new' %}" class="mt-4 inline-flex rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-500">
+      {% trans "Make a loan request" %}
+    </a>
+  </div>
+  {% else %}
+  <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+    <div class="overflow-x-auto">
+      <table id="loans-table" class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+        <thead>
+          <tr class="bg-slate-50 dark:bg-slate-800/60">
+            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Reference" %}</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Type" %}</th>
+            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Amount" %}</th>
+            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Term" %}</th>
+            <th class="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Status" %}</th>
+            <th class="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Score" %}</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Date" %}</th>
+            <th class="px-5 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for lr in loan_requests %}
+          <tr class="group transition hover:bg-sky-50/50 dark:hover:bg-sky-900/10"
+              data-status="{{ lr.status }}"
+              data-type="{{ lr.loan_type }}"
+              data-date="{{ lr.creation_date|date:'Y-m-d' }}">
+            {# Reference #}
+            <td class="whitespace-nowrap px-5 py-4">
+              <span class="font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">{{ lr.reference }}</span>
+            </td>
+            {# Loan type #}
+            <td class="whitespace-nowrap px-5 py-4 font-medium text-slate-900 dark:text-white">
+              {{ lr.get_loan_type_display }}
+            </td>
+            {# Amount #}
+            <td class="whitespace-nowrap px-5 py-4 text-right text-slate-700 dark:text-slate-300">
+              {{ lr.amount_requested|floatformat:2 }} €
+            </td>
+            {# Term #}
+            <td class="whitespace-nowrap px-5 py-4 text-right text-slate-500 dark:text-slate-400">
+              {{ lr.term_months }} {% trans "mo." %}
+            </td>
+            {# Status badge #}
+            <td class="whitespace-nowrap px-5 py-4 text-center">
+              <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold
+                {% if lr.status == 'pending' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300
+                {% elif lr.status == 'validated' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300
+                {% elif lr.status == 'rejected' %}bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300
+                {% elif lr.status == 'canceled' %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300
+                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                {% if lr.status == 'pending' %}⏳{% elif lr.status == 'validated' %}✅{% elif lr.status == 'rejected' %}❌{% elif lr.status == 'canceled' %}🚫{% else %}🔒{% endif %}
+                {{ lr.get_status_display }}
+              </span>
+            </td>
+            {# Score #}
+            <td class="whitespace-nowrap px-5 py-4 text-center">
+              {% if lr.score is not None %}
+              <span class="inline-block rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                {{ lr.score|floatformat:0 }}%
+              </span>
+              {% else %}
+              <span class="text-slate-400 dark:text-slate-600">—</span>
+              {% endif %}
+            </td>
+            {# Date #}
+            <td class="whitespace-nowrap px-5 py-4 text-slate-500 dark:text-slate-400">
+              {{ lr.creation_date|date:"d/m/Y" }}
+            </td>
+            {# Action #}
+            <td class="whitespace-nowrap px-5 py-4 text-right">
+              <a href="{% url 'loan_request_detail' lr.pk %}"
+                 class="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-400 hover:text-sky-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-sky-500 dark:hover:text-sky-400">
+                {% trans "View" %} →
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+      <span id="visible-count">{{ loan_requests|length }}</span> {% trans "request(s)" %}
+    </div>
+  </div>
+  {% endif %}
+
+  <script>
+    (function () {
+      const selStatus   = document.getElementById('filter-status');
+      const selType     = document.getElementById('filter-type');
+      const inputFrom   = document.getElementById('filter-date-from');
+      const inputTo     = document.getElementById('filter-date-to');
+      const btnReset    = document.getElementById('filter-reset');
+      const table       = document.getElementById('loans-table');
+      const countEl     = document.getElementById('visible-count');
+
+      if (!table) return;
+
+      // Deduplicate type options
+      const typeSelect = selType;
+      const seen = new Set();
+      Array.from(typeSelect.options).forEach(opt => {
+        if (opt.value === '') { seen.add(''); return; }
+        if (seen.has(opt.value)) opt.remove();
+        else seen.add(opt.value);
+      });
+
+      function applyFilters() {
+        const status  = selStatus.value;
+        const type    = selType.value;
+        const from    = inputFrom.value ? new Date(inputFrom.value) : null;
+        const to      = inputTo.value   ? new Date(inputTo.value)   : null;
+        if (to) to.setHours(23, 59, 59, 999);
+
+        const rows = table.querySelectorAll('tbody tr');
+        let visible = 0;
+
+        rows.forEach(row => {
+          const rowStatus = row.dataset.status;
+          const rowType   = row.dataset.type;
+          const rowDate   = row.dataset.date ? new Date(row.dataset.date) : null;
+
+          const matchStatus = !status || rowStatus === status;
+          const matchType   = !type   || rowType   === type;
+          const matchFrom   = !from   || (rowDate && rowDate >= from);
+          const matchTo     = !to     || (rowDate && rowDate <= to);
+
+          const show = matchStatus && matchType && matchFrom && matchTo;
+          row.style.display = show ? '' : 'none';
+          if (show) visible++;
+        });
+
+        if (countEl) countEl.textContent = visible;
+      }
+
+      selStatus.addEventListener('change', applyFilters);
+      selType.addEventListener('change', applyFilters);
+      inputFrom.addEventListener('change', applyFilters);
+      inputTo.addEventListener('change', applyFilters);
+
+      btnReset.addEventListener('click', function () {
+        selStatus.value = '';
+        selType.value   = '';
+        inputFrom.value = '';
+        inputTo.value   = '';
+        applyFilters();
+      });
+    })();
+  </script>
+</div>
+{% endblock %}

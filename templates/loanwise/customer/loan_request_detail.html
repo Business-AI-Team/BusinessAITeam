@@ -1,0 +1,140 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ loan_request.reference }} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-6">
+
+  {# Breadcrumb #}
+  <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+    <a href="{% url 'customer_dashboard' %}" class="hover:text-sky-600 dark:hover:text-sky-400">{% trans "Dashboard" %}</a>
+    <span>›</span>
+    <span class="font-medium text-slate-900 dark:text-white">{{ loan_request.reference }}</span>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for msg in messages %}
+    <div class="rounded-xl px-4 py-3 text-sm {% if msg.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Status banner #}
+  <div class="flex flex-col gap-4 rounded-2xl border p-6 sm:flex-row sm:items-center sm:justify-between
+    {% if loan_request.status == 'pending' %}border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-900/20
+    {% elif loan_request.status == 'validated' %}border-emerald-300 bg-emerald-50/80 dark:border-emerald-700 dark:bg-emerald-900/20
+    {% elif loan_request.status == 'rejected' %}border-red-300 bg-red-50/80 dark:border-red-700 dark:bg-red-900/20
+    {% else %}border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80{% endif %}">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">{{ loan_request.get_loan_type_display }}</p>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ loan_request.reference }}</h1>
+      <div class="mt-2 flex flex-wrap gap-3 text-sm">
+        <span class="rounded-full px-3 py-1 font-semibold
+          {% if loan_request.status == 'pending' %}bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100
+          {% elif loan_request.status == 'validated' %}bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-100
+          {% elif loan_request.status == 'rejected' %}bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100
+          {% else %}bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100{% endif %}">
+          {{ loan_request.get_status_display }}
+        </span>
+        <span class="text-slate-500 dark:text-slate-400">{{ loan_request.creation_date|date:"d/m/Y H:i" }}</span>
+      </div>
+    </div>
+    {% if loan_request.score is not None %}
+    <div class="text-center">
+      <p class="text-4xl font-black text-sky-600 dark:text-sky-400">{{ loan_request.score|floatformat:0 }}%</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Eligibility score" %}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Loan info #}
+  <div class="grid gap-4 sm:grid-cols-3">
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Amount requested" %}</p>
+      <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ loan_request.amount_requested|floatformat:2 }} €</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Term" %}</p>
+      <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ loan_request.term_months }} {% trans "months" %}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/80">
+      <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Annual income" %}</p>
+      <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ loan_request.annual_income|floatformat:2 }} €</p>
+    </div>
+  </div>
+
+  {% if loan_request.purpose %}
+  <div class="rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/80">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Purpose" %}</p>
+    <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">{{ loan_request.purpose }}</p>
+  </div>
+  {% endif %}
+
+  {# Documents #}
+  <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+    <div class="mb-4 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents" %} ({{ documents|length }})</h2>
+    </div>
+
+    {% if documents %}
+    <div class="grid gap-3">
+      {% for doc in documents %}
+      <div class="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+        <span class="text-2xl">📄</span>
+        <div class="flex-1 min-w-0">
+          <p class="truncate font-medium text-slate-900 dark:text-white text-sm">{{ doc.original_filename }}</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">{{ doc.get_document_type_display }} · {{ doc.created_at|date:"d/m/Y" }}</p>
+        </div>
+        {% if doc.requirement %}
+        <span class="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">{{ doc.requirement.label_fr }}</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400 dark:text-slate-500">{% trans "No documents uploaded yet." %}</p>
+    {% endif %}
+
+    {# Add more documents #}
+    {% if loan_request.status == 'pending' %}
+    <details class="mt-4">
+      <summary class="cursor-pointer text-sm font-medium text-sky-600 hover:underline dark:text-sky-400">+ {% trans "Add more documents" %}</summary>
+      <form method="post" enctype="multipart/form-data" class="mt-3 space-y-3" x-data="{ docs: [{}] }">
+        {% csrf_token %}
+        <template x-for="(d, i) in docs" :key="i">
+          <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50 sm:flex-row sm:items-center">
+            <input type="file" name="documents" required class="flex-1 text-sm text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-sky-100 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-sky-700">
+            <select name="doc_types" class="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950">
+              {% for val, label in document_types %}
+              <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+            <select name="req_ids" class="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950">
+              <option value="">—</option>
+              {% for req in requirements %}
+              <option value="{{ req.pk }}">{{ req.label_fr }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" @click="docs.splice(i,1)" class="text-red-400 hover:text-red-600">✕</button>
+          </div>
+        </template>
+        <div class="flex gap-2">
+          <button type="button" @click="docs.push({})" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">+ {% trans "Add" %}</button>
+          <button type="submit" class="rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-sky-500">{% trans "Upload" %}</button>
+        </div>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+
+  {# AI Check — static placeholder #}
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+    <p class="text-2xl">🤖</p>
+    <p class="mt-2 font-medium text-slate-700 dark:text-slate-200">{% trans "AI Eligibility Check" %}</p>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "The AI scoring pipeline will be available soon. Your documents are safely stored." %}</p>
+  </div>
+
+</div>
+{% endblock %}

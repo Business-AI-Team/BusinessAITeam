@@ -1,0 +1,142 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Document Requirements" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in-up space-y-6" x-data="{ showForm: false }">
+
+  <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div>
+      <a href="{% url 'backoffice_dashboard' %}" class="text-sm text-sky-600 hover:underline dark:text-sky-400">← {% trans "Dashboard" %}</a>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{% trans "Document Requirements" %}</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "Define which documents are required for each loan type." %}</p>
+    </div>
+    <button @click="showForm = !showForm" class="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-500">
+      + {% trans "Add requirement" %}
+    </button>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for msg in messages %}
+    <div class="rounded-xl px-4 py-3 text-sm {% if msg.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Add form #}
+  <div x-show="showForm" x-cloak class="rounded-2xl border border-sky-200 bg-sky-50/80 p-6 dark:border-sky-800 dark:bg-sky-900/20">
+    <h2 class="mb-4 font-semibold text-slate-900 dark:text-white">{% trans "New Requirement" %}</h2>
+    <form method="post" class="grid gap-4 sm:grid-cols-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Code" %} <span class="text-red-500">*</span></label>
+        <input name="code" type="text" placeholder="e.g. id_card" required
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Sort order" %}</label>
+        <input name="sort_order" type="number" value="0"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Label (French)" %} <span class="text-red-500">*</span></label>
+        <input name="label_fr" type="text" required
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Label (English)" %}</label>
+        <input name="label_en" type="text"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Description (FR)" %}</label>
+        <textarea name="description_fr" rows="2"
+                  class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Description (EN)" %}</label>
+        <textarea name="description_en" rows="2"
+                  class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Applies to loan types" %}</label>
+        <div class="mt-2 flex flex-wrap gap-3">
+          {% for val, label in loan_types %}
+          <label class="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+            <input type="checkbox" name="loan_types" value="{{ val }}" class="rounded">
+            {{ label }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="checkbox" name="is_required" id="is_required" checked class="rounded">
+        <label for="is_required" class="text-sm text-slate-600 dark:text-slate-300">{% trans "Required" %}</label>
+      </div>
+      <div class="sm:col-span-2 flex gap-3">
+        <button type="submit" class="rounded-xl bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-500">{% trans "Save" %}</button>
+        <button type="button" @click="showForm = false" class="rounded-xl border border-slate-200 px-5 py-2 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">{% trans "Cancel" %}</button>
+      </div>
+    </form>
+  </div>
+
+  {# Requirements list #}
+  {% if requirements %}
+  <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80">
+    <table class="w-full text-sm">
+      <thead class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
+        <tr>
+          <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">#</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{% trans "Code" %}</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{% trans "Label" %}</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{% trans "Required" %}</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{% trans "Active" %}</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+        {% for req in requirements %}
+        <tr class="{% if not req.active %}opacity-50{% endif %} hover:bg-slate-50 dark:hover:bg-slate-800/50">
+          <td class="px-4 py-3 text-slate-400">{{ req.sort_order }}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">{{ req.code }}</td>
+          <td class="px-4 py-3">
+            <p class="font-medium text-slate-900 dark:text-white">{{ req.label_fr }}</p>
+            {% if req.label_en %}<p class="text-xs text-slate-400">{{ req.label_en }}</p>{% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {% if req.is_required %}<span class="text-emerald-600 dark:text-emerald-400">✓</span>{% else %}<span class="text-slate-400">—</span>{% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle">
+              <input type="hidden" name="req_id" value="{{ req.pk }}">
+              <button type="submit" class="rounded-full px-2 py-0.5 text-xs font-semibold
+                {% if req.active %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300{% else %}bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400{% endif %}">
+                {% if req.active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+              </button>
+            </form>
+          </td>
+          <td class="px-4 py-3">
+            <form method="post" class="inline" onsubmit="return confirm('{% trans "Delete this requirement?" %}')">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="req_id" value="{{ req.pk }}">
+              <button type="submit" class="text-red-400 hover:text-red-600 text-xs">{% trans "Delete" %}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="rounded-2xl border border-dashed border-slate-300 p-12 text-center dark:border-slate-700">
+    <p class="text-slate-500 dark:text-slate-400">{% trans "No requirements defined yet." %}</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "loanwise/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "New Loan Request" %} — {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl animate-fade-in-up space-y-6">
+
+  <div>
+    <a href="{% url 'customer_dashboard' %}" class="text-sm text-sky-600 hover:underline dark:text-sky-400">← {% trans "Back to dashboard" %}</a>
+    <h1 class="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{% trans "Make a Loan Request" %}</h1>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "Fill in your loan details and upload the required documents." %}</p>
+  </div>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for msg in messages %}
+    <div class="rounded-xl px-4 py-3 text-sm {% if msg.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="space-y-6" x-data="loanForm()" x-init="init()">
+    {% csrf_token %}
+
+    {# ── Loan details ── #}
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <h2 class="mb-4 font-semibold text-slate-900 dark:text-white">{% trans "Loan Details" %}</h2>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Loan type" %} <span class="text-red-500">*</span></label>
+          <select name="loan_type" required class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950">
+            {% for val, label in loan_types %}
+            <option value="{{ val }}" {% if form_data.loan_type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Amount requested (€)" %} <span class="text-red-500">*</span></label>
+          <input name="amount_requested" type="number" min="0" step="0.01" required value="{{ form_data.amount_requested|default:'' }}"
+                 class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Term (months)" %}</label>
+          <input name="term_months" type="number" min="1" max="360" value="{{ form_data.term_months|default:'12' }}"
+                 class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Annual income (€)" %}</label>
+          <input name="annual_income" type="number" min="0" step="0.01" value="{{ form_data.annual_income|default:'' }}"
+                 class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Purpose" %}</label>
+          <textarea name="purpose" rows="3"
+                    class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950">{{ form_data.purpose|default:'' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    {# ── Documents ── #}
+    <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents" %}</h2>
+        <button type="button" @click="addDoc()"
+                class="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-300">
+          + {% trans "Add document" %}
+        </button>
+      </div>
+
+      {% if requirements %}
+      <div class="mb-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+        <p class="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">{% trans "Required documents:" %}</p>
+        <ul class="space-y-1">
+          {% for req in requirements %}
+          <li class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <span class="text-amber-500">●</span>
+            {{ req.label_fr }}
+            {% if not req.is_required %}<span class="text-xs text-slate-400">({% trans "optional" %})</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="space-y-3" id="doc-list">
+        <template x-for="(doc, idx) in docs" :key="idx">
+          <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50 sm:flex-row sm:items-center">
+            <div class="flex-1">
+              <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "File" %}</label>
+              <input type="file" :name="'documents'" required
+                     class="mt-1 w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-sky-700 dark:text-slate-300">
+            </div>
+            <div class="w-full sm:w-44">
+              <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Type" %}</label>
+              <select :name="'doc_types'" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950">
+                {% for val, label in document_types %}
+                <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="w-full sm:w-44">
+              <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Requirement" %}</label>
+              <select :name="'req_ids'" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950">
+                <option value="">—</option>
+                {% for req in requirements %}
+                <option value="{{ req.pk }}">{{ req.label_fr }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="button" @click="docs.splice(idx,1)" class="mt-4 text-red-400 hover:text-red-600 sm:mt-0">✕</button>
+          </div>
+        </template>
+      </div>
+      <p x-show="docs.length === 0" class="mt-2 text-sm text-slate-400 dark:text-slate-500">{% trans "No documents added yet. Click 'Add document' to attach files." %}</p>
+    </div>
+
+    <div class="flex gap-3">
+      <a href="{% url 'customer_dashboard' %}" class="flex-1 rounded-xl border border-slate-200 py-2.5 text-center text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+        {% trans "Cancel" %}
+      </a>
+      <button type="submit" class="flex-1 rounded-xl bg-sky-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500 transition">
+        {% trans "Submit request" %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loanForm() {
+  return {
+    docs: [],
+    init() { this.addDoc(); },
+    addDoc() { this.docs.push({}); },
+  };
+}
+</script>
+{% endblock %}
