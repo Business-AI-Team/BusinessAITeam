@@ -9,7 +9,9 @@
   {# Header #}
   <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-sky-600 dark:text-sky-400">{% trans "Customer" %}</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-sky-600 dark:text-sky-400">
+        {{ request.user.first_name }} {{ request.user.last_name }}
+      </p>
       <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
         {% trans "My Loan Requests" %}
       </h1>
@@ -70,36 +72,81 @@
     </a>
   </div>
   {% else %}
-  <div class="grid gap-4">
-    {% for lr in loan_requests %}
-    <a href="{% url 'loan_request_detail' lr.pk %}"
-       class="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-sky-600 sm:flex-row sm:items-center">
-      <div class="flex items-start gap-4">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl
-          {% if lr.status == 'pending' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300
-          {% elif lr.status == 'validated' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300
-          {% elif lr.status == 'rejected' %}bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300
-          {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
-          {% if lr.status == 'pending' %}⏳{% elif lr.status == 'validated' %}✅{% elif lr.status == 'rejected' %}❌{% elif lr.status == 'canceled' %}🚫{% else %}🔒{% endif %}
-        </div>
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">{{ lr.reference }}</p>
-          <p class="mt-0.5 font-semibold text-slate-900 dark:text-white">{{ lr.get_loan_type_display }}</p>
-          <p class="text-sm text-slate-500 dark:text-slate-400">
-            {{ lr.get_status_display }} · {{ lr.creation_date|date:"d/m/Y" }}
-          </p>
-        </div>
-      </div>
-      <div class="mt-4 flex items-center gap-3 sm:mt-0">
-        {% if lr.score is not None %}
-        <span class="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
-          Score: {{ lr.score|floatformat:0 }}%
-        </span>
-        {% endif %}
-        <span class="text-slate-400 transition group-hover:translate-x-1">→</span>
-      </div>
-    </a>
-    {% endfor %}
+  <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+        <thead>
+          <tr class="bg-slate-50 dark:bg-slate-800/60">
+            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Reference" %}</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Type" %}</th>
+            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Amount" %}</th>
+            <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Term" %}</th>
+            <th class="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Status" %}</th>
+            <th class="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Score" %}</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Date" %}</th>
+            <th class="px-5 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for lr in loan_requests %}
+          <tr class="group transition hover:bg-sky-50/50 dark:hover:bg-sky-900/10">
+            {# Reference #}
+            <td class="whitespace-nowrap px-5 py-4">
+              <span class="font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">{{ lr.reference }}</span>
+            </td>
+            {# Loan type #}
+            <td class="whitespace-nowrap px-5 py-4 font-medium text-slate-900 dark:text-white">
+              {{ lr.get_loan_type_display }}
+            </td>
+            {# Amount #}
+            <td class="whitespace-nowrap px-5 py-4 text-right text-slate-700 dark:text-slate-300">
+              {{ lr.amount_requested|floatformat:2 }} €
+            </td>
+            {# Term #}
+            <td class="whitespace-nowrap px-5 py-4 text-right text-slate-500 dark:text-slate-400">
+              {{ lr.term_months }} {% trans "mo." %}
+            </td>
+            {# Status badge #}
+            <td class="whitespace-nowrap px-5 py-4 text-center">
+              <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold
+                {% if lr.status == 'pending' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300
+                {% elif lr.status == 'validated' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300
+                {% elif lr.status == 'rejected' %}bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300
+                {% elif lr.status == 'canceled' %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300
+                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                {% if lr.status == 'pending' %}⏳{% elif lr.status == 'validated' %}✅{% elif lr.status == 'rejected' %}❌{% elif lr.status == 'canceled' %}🚫{% else %}🔒{% endif %}
+                {{ lr.get_status_display }}
+              </span>
+            </td>
+            {# Score #}
+            <td class="whitespace-nowrap px-5 py-4 text-center">
+              {% if lr.score is not None %}
+              <span class="inline-block rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                {{ lr.score|floatformat:0 }}%
+              </span>
+              {% else %}
+              <span class="text-slate-400 dark:text-slate-600">—</span>
+              {% endif %}
+            </td>
+            {# Date #}
+            <td class="whitespace-nowrap px-5 py-4 text-slate-500 dark:text-slate-400">
+              {{ lr.creation_date|date:"d/m/Y" }}
+            </td>
+            {# Action #}
+            <td class="whitespace-nowrap px-5 py-4 text-right">
+              <a href="{% url 'loan_request_detail' lr.pk %}"
+                 class="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-sky-400 hover:text-sky-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-sky-500 dark:hover:text-sky-400">
+                {% trans "View" %} →
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+      {{ loan_requests|length }} {% trans "request(s)" %}
+    </div>
   </div>
   {% endif %}
 </div>

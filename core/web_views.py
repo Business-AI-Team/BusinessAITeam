@@ -14,6 +14,7 @@ import os
 
 from django.conf import settings as django_settings
 from django.contrib import messages
+from django.db import models
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
@@ -360,13 +361,44 @@ def backoffice_dashboard(request: HttpRequest) -> HttpResponse:
     pending = LoanRequest.objects.filter(status=LoanRequestStatus.PENDING).count()
     validated = LoanRequest.objects.filter(status=LoanRequestStatus.VALIDATED).count()
     rejected = LoanRequest.objects.filter(status=LoanRequestStatus.REJECTED).count()
-    recent = LoanRequest.objects.select_related("customer", "account").order_by("-creation_date")[:10]
+
+    qs = LoanRequest.objects.select_related("customer", "account").order_by("-creation_date")
+
+    f_status = request.GET.get("status", "").strip()
+    f_customer = request.GET.get("customer", "").strip()
+    f_type = request.GET.get("loan_type", "").strip()
+    f_date_from = request.GET.get("date_from", "").strip()
+    f_date_to = request.GET.get("date_to", "").strip()
+
+    if f_status:
+        qs = qs.filter(status=f_status)
+    if f_customer:
+        qs = qs.filter(
+            models.Q(customer__first_name__icontains=f_customer)
+            | models.Q(customer__last_name__icontains=f_customer)
+            | models.Q(account__email__icontains=f_customer)
+        )
+    if f_type:
+        qs = qs.filter(loan_type=f_type)
+    if f_date_from:
+        qs = qs.filter(creation_date__date__gte=f_date_from)
+    if f_date_to:
+        qs = qs.filter(creation_date__date__lte=f_date_to)
+
     return render(request, "loanwise/backoffice/dashboard.html", {
         "total": total,
         "pending": pending,
         "validated": validated,
         "rejected": rejected,
-        "recent_requests": recent,
+        "recent_requests": qs[:50],
+        "status_choices": LoanRequestStatus.choices,
+        "type_choices": LoanType.choices,
+        "f_status": f_status,
+        "f_customer": f_customer,
+        "f_type": f_type,
+        "f_date_from": f_date_from,
+        "f_date_to": f_date_to,
+        "filtered_count": qs.count(),
     })
 
 
