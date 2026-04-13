@@ -498,7 +498,7 @@ msgid "Under review"
 msgstr "En analyse"
 
 msgid "Upload"
-msgstr "Envoyer"
+msgstr "Téléverser"
 
 msgid "Uploading video…"
 msgstr "Envoi de la vidéo…"
@@ -559,3 +559,93 @@ msgstr "Vos demandes"
 
 msgid "Your email is verified. Welcome!"
 msgstr "Votre e-mail est vérifié. Bienvenue !"
+
+msgid "Actions"
+msgstr "Actions"
+
+msgid "Add PDF document"
+msgstr "Ajouter un document PDF"
+
+msgid "Conditions"
+msgstr "Conditions"
+
+msgid "Criteria document added and indexed."
+msgstr "Document de critères ajouté et indexé."
+
+msgid "Criteria document deleted."
+msgstr "Document de critères supprimé."
+
+msgid "Delete"
+msgstr "Supprimer"
+
+msgid "Delete this document?"
+msgstr "Supprimer ce document ?"
+
+msgid "Eligibility criteria"
+msgstr "Critères d'éligibilité"
+
+msgid "Active"
+msgstr "Actif"
+
+msgid "Inactive"
+msgstr "Inactif"
+
+msgid "Indexed"
+msgstr "Indexé"
+
+msgid "Open file"
+msgstr "Ouvrir le fichier"
+
+msgid "No eligibility PDFs yet. Upload a bank policy document above."
+msgstr ""
+"Aucun PDF de critères pour l'instant. Téléversez un document de politique "
+"bancaire ci-dessus."
+
+msgid "Only PDF files are accepted."
+msgstr "Seuls les fichiers PDF sont acceptés."
+
+msgid "PDF file"
+msgstr "Fichier PDF"
+
+msgid "Please choose a PDF file to upload."
+msgstr "Veuillez choisir un fichier PDF à téléverser."
+
+msgid ""
+"Upload PDF policy documents from the bank. Text is extracted and used to "
+"guide loan eligibility for applicants."
+msgstr ""
+"Téléversez des documents de politique bancaire au format PDF. Le texte est "
+"extrait et sert à orienter l'éligibilité des demandeurs de prêt."
+
+msgid "Uploaded criteria"
+msgstr "Critères téléversés"
+
+msgid "Agents"
+msgstr "Agents"
+
+msgid "Back-Office"
+msgstr "Arrière-guichet"
+
+msgid "Choose file"
+msgstr "Choisir un fichier"
+
+msgid "File"
+msgstr "Fichier"
+
+msgid "My requests"
+msgstr "Mes demandes"
+
+msgid "New request"
+msgstr "Nouvelle demande"
+
+msgid "No file chosen"
+msgstr "Aucun fichier sélectionné"
+
+msgid "Notifications"
+msgstr "Notifications"
+
+msgid "Requests"
+msgstr "Demandes"
+
+msgid "Requirements"
+msgstr "Exigences"

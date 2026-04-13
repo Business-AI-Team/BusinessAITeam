@@ -548,3 +548,91 @@ msgstr "Your applications"
 
 msgid "Your email is verified. Welcome!"
 msgstr "Your email is verified. Welcome!"
+
+msgid "Actions"
+msgstr "Actions"
+
+msgid "Add PDF document"
+msgstr "Add PDF document"
+
+msgid "Conditions"
+msgstr "Conditions"
+
+msgid "Criteria document added and indexed."
+msgstr "Criteria document added and indexed."
+
+msgid "Criteria document deleted."
+msgstr "Criteria document deleted."
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Delete this document?"
+msgstr "Delete this document?"
+
+msgid "Eligibility criteria"
+msgstr "Eligibility criteria"
+
+msgid "Active"
+msgstr "Active"
+
+msgid "Inactive"
+msgstr "Inactive"
+
+msgid "Indexed"
+msgstr "Indexed"
+
+msgid "Open file"
+msgstr "Open file"
+
+msgid "No eligibility PDFs yet. Upload a bank policy document above."
+msgstr "No eligibility PDFs yet. Upload a bank policy document above."
+
+msgid "Only PDF files are accepted."
+msgstr "Only PDF files are accepted."
+
+msgid "PDF file"
+msgstr "PDF file"
+
+msgid "Please choose a PDF file to upload."
+msgstr "Please choose a PDF file to upload."
+
+msgid ""
+"Upload PDF policy documents from the bank. Text is extracted and used to "
+"guide loan eligibility for applicants."
+msgstr ""
+"Upload PDF policy documents from the bank. Text is extracted and used to "
+"guide loan eligibility for applicants."
+
+msgid "Uploaded criteria"
+msgstr "Uploaded criteria"
+
+msgid "Agents"
+msgstr "Agents"
+
+msgid "Back-Office"
+msgstr "Back-Office"
+
+msgid "Choose file"
+msgstr "Choose file"
+
+msgid "File"
+msgstr "File"
+
+msgid "My requests"
+msgstr "My requests"
+
+msgid "New request"
+msgstr "New request"
+
+msgid "No file chosen"
+msgstr "No file chosen"
+
+msgid "Notifications"
+msgstr "Notifications"
+
+msgid "Requests"
+msgstr "Requests"
+
+msgid "Requirements"
+msgstr "Requirements"
