@@ -17,7 +17,7 @@ from django.contrib import messages
 from django.db import models
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
@@ -351,6 +351,31 @@ def notifications_page(request: HttpRequest) -> HttpResponse:
     return render(request, "loanwise/customer/notifications.html", {
         "notifications": notifications,
     })
+
+
+@_require_customer
+def notifications_json(request: HttpRequest) -> JsonResponse:
+    """Return notifications as JSON for the header bell modal."""
+    from django.urls import reverse
+    loan_requests = LoanRequest.objects.filter(account=request.user).order_by("-creation_date")
+    data = []
+    for lr in loan_requests:
+        try:
+            n = lr.notification
+            data.append({
+                "id": n.pk,
+                "read": n.read,
+                "loan_reference": lr.reference,
+                "loan_request_id": lr.pk,
+                "loan_request_url": reverse("loan_request_detail", args=[lr.pk]),
+                "loan_status": lr.status,
+                "loan_status_display": lr.get_status_display(),
+                "date": n.date.strftime("%d/%m/%Y %H:%M"),
+            })
+        except Exception:
+            pass
+    unread_count = sum(1 for d in data if not d["read"])
+    return JsonResponse({"notifications": data, "unread_count": unread_count})
 
 
 # ── Back-Office workspace ─────────────────────────────────────────────────────
