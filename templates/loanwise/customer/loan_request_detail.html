@@ -88,7 +88,7 @@
           <p class="text-xs text-slate-500 dark:text-slate-400">{{ doc.get_document_type_display }} · {{ doc.created_at|date:"d/m/Y" }}</p>
         </div>
         {% if doc.requirement %}
-        <span class="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">{{ doc.requirement.label_fr }}</span>
+        <span class="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">{{ doc.requirement.name }}</span>
         {% endif %}
       </div>
       {% endfor %}
@@ -114,7 +114,7 @@
             <select name="req_ids" class="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950">
               <option value="">—</option>
               {% for req in requirements %}
-              <option value="{{ req.pk }}">{{ req.label_fr }}</option>
+              <option value="{{ req.pk }}">{{ req.name }}</option>
               {% endfor %}
             </select>
             <button type="button" @click="docs.splice(i,1)" class="text-red-400 hover:text-red-600">✕</button>

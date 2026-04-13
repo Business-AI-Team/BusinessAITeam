@@ -21,6 +21,7 @@ urlpatterns = [
     path("my/new-request/", web_views.loan_request_new, name="loan_request_new"),
     path("my/requests/<int:pk>/", web_views.loan_request_detail, name="loan_request_detail"),
     path("my/notifications/", web_views.notifications_page, name="notifications_page"),
+    path("my/notifications/json/", web_views.notifications_json, name="notifications_json"),
 
     # ── Back-Office workspace ───────────────────────────────────────────────
     path("bo/", web_views.backoffice_dashboard, name="backoffice_dashboard"),

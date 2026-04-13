@@ -52,28 +52,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class DocumentRequirementSerializer(serializers.ModelSerializer):
-    label = serializers.SerializerMethodField()
-    description = serializers.SerializerMethodField()
-
     class Meta:
         model = DocumentRequirement
-        fields = (
-            "id",
-            "code",
-            "label",
-            "description",
-            "applies_to_loan_types",
-            "is_required",
-            "sort_order",
-        )
-
-    def get_label(self, obj: DocumentRequirement) -> str:
-        lang = self.context.get("language") or "en"
-        return obj.label_fr if lang.startswith("fr") else obj.label_en
-
-    def get_description(self, obj: DocumentRequirement) -> str:
-        lang = self.context.get("language") or "en"
-        return obj.description_fr if lang.startswith("fr") else obj.description_en
+        fields = ("id", "name", "is_mandatory")
 
 
 class LoanRequestSerializer(serializers.ModelSerializer):

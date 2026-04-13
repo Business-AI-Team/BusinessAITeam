@@ -15,7 +15,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from core.document_processor import analyze_document_image
-from core.document_requirement_service import missing_required_codes, requirements_for_application
+from core.document_requirement_service import missing_mandatory, requirements_for_application
 from core.face_verification import verify_faces
 from core.liveness_service import run_liveness_check
 from core.loan_engine import run_eligibility_for_application
@@ -25,18 +25,8 @@ from core.security_utils import secure_delete_file
 logger = logging.getLogger(__name__)
 
 
-def _find_doc_by_code(loan_request: LoanRequest, code: str) -> Document | None:
-    for doc in loan_request.documents.filter(deleted_at__isnull=True).select_related("requirement"):
-        if doc.requirement and doc.requirement.code == code:
-            return doc
-    return None
-
-
 def _find_identity_doc(loan_request: LoanRequest) -> Document | None:
-    """Prefer explicit identity_card requirement; else latest document tagged as ID Card."""
-    d = _find_doc_by_code(loan_request, "identity_card")
-    if d:
-        return d
+    """Latest document tagged as ID Card."""
     return (
         loan_request.documents.filter(deleted_at__isnull=True, document_type=DocumentType.ID_CARD)
         .order_by("-created_at")
@@ -52,9 +42,7 @@ def _find_liveness_video_doc(loan_request: LoanRequest) -> Document | None:
         name = (doc.original_filename or "").lower()
         if not name.endswith((".webm", ".mp4", ".mov", ".mkv", ".avi")):
             continue
-        if doc.document_type == DocumentType.FACE_SELFIE or (
-            doc.requirement and doc.requirement.code == "face_selfie"
-        ):
+        if doc.document_type == DocumentType.FACE_SELFIE:
             return doc
     return None
 
@@ -73,14 +61,15 @@ def run_orchestration(loan_request: LoanRequest) -> LoanRequest:
 
     log("start", {"language": language})
 
-    uploaded: set[str] = set()
-    for doc in loan_request.documents.filter(deleted_at__isnull=True):
-        if doc.requirement:
-            uploaded.add(doc.requirement.code)
+    uploaded_ids: set[int] = {
+        doc.requirement_id
+        for doc in loan_request.documents.filter(deleted_at__isnull=True)
+        if doc.requirement_id
+    }
 
-    missing = missing_required_codes(loan_request, uploaded)
+    missing = missing_mandatory(loan_request, uploaded_ids)
     if missing:
-        log("blocked", {"missing_documents": missing})
+        log("blocked", {"missing_documents": [r.name for r in missing]})
         loan_request.orchestration_log = run_log
         loan_request.status = LoanRequestStatus.PENDING
         loan_request.save(update_fields=["orchestration_log", "status", "modification_date"])
@@ -107,7 +96,6 @@ def run_orchestration(loan_request: LoanRequest) -> LoanRequest:
         name_l = (doc.original_filename or "").lower()
         if name_l.endswith((".webm", ".mp4", ".mov", ".mkv", ".avi")) and (
             doc.document_type == DocumentType.FACE_SELFIE
-            or (doc.requirement and doc.requirement.code == "face_selfie")
         ):
             prev = doc.analysis_result or {}
             doc.analysis_result = {
@@ -133,7 +121,7 @@ def run_orchestration(loan_request: LoanRequest) -> LoanRequest:
     for d in loan_request.documents.filter(deleted_at__isnull=True).order_by("-created_at"):
         if liveness_doc and d.pk == liveness_doc.pk:
             continue
-        if d.document_type == DocumentType.FACE_SELFIE or (d.requirement and d.requirement.code == "face_selfie"):
+        if d.document_type == DocumentType.FACE_SELFIE:
             selfie = d
             break
 
