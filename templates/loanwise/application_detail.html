@@ -4,41 +4,48 @@
 {% block title %}{{ application.reference }} — {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="space-y-10" x-data="appWorkspace({{ application.id }}, { initialProgress: {{ lw_initial_progress }}, requireEmail: {{ lw_require_email|yesno:'true,false' }}, emailVerified: {{ lw_email_verified|yesno:'true,false' }} })" x-init="csrf = getCookie('csrftoken'); init()" @loanwise-file-uploaded.window="progressPct = Math.min(88, progressPct + 12)">
+<div class="space-y-10" x-data="appWorkspace({{ application.id }}, { initialProgress: {{ lw_initial_progress }}, loanAmount: '{% filter escapejs %}{{ application.amount_requested|unlocalize }}{% endfilter %}', loanTerm: {% if application.term_months %}{{ application.term_months }}{% else %}null{% endif %}, loanCurrency: '{% filter escapejs %}{{ application.amount_currency|default:"EUR" }}{% endfilter %}' })" x-init="csrf = getCookie('csrftoken'); init()" @loanwise-file-uploaded.window="onFileUploaded($event); progressPct = Math.min(88, progressPct + 12)">
   {% if lw_portal_backoffice %}
   <div class="animate-fade-in-up rounded-2xl border border-violet-400/50 bg-violet-950/25 p-4 text-sm text-violet-100 dark:border-violet-600/50">
     <p class="font-semibold">{% trans "Backoffice view" %}</p>
     <p class="mt-1 text-xs text-violet-200/90">{% trans "Applicant" %}: {{ lw_applicant_email }} · <a href="{% url 'backoffice_dashboard' %}" class="underline hover:text-white">{% trans "All applications" %}</a></p>
   </div>
   {% endif %}
-  {% if lw_require_email and not lw_email_verified %}
-  <div class="animate-fade-in-up rounded-2xl border border-amber-300/80 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
-    {% trans "Email verification is required to run the AI pipeline. If you did not receive an email, check the terminal where runserver is running (console email backend), or ask an administrator to mark your account as verified." %}
-  </div>
-  {% elif not lw_require_email %}
-  <div class="animate-fade-in-up rounded-2xl border border-sky-300/60 bg-sky-50/80 p-4 text-sm text-sky-950 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
-    {% trans "Development: verified email is not required to run the pipeline. Configure SMTP and set LOANWISE_REQUIRE_EMAIL_VERIFICATION=true for production-like behaviour." %}
-  </div>
-  {% endif %}
 
-  <div class="animate-fade-in-up flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+  <div class="animate-fade-in-up flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <p class="text-xs font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">{{ application.reference }}</p>
       <h1 class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{% trans "Application workspace" %}</h1>
       <p class="mt-2 text-slate-600 dark:text-slate-400">
-        {{ application.get_loan_type_display }} · {{ application.get_status_display }}
+        {{ application.get_loan_type_display }}
       </p>
     </div>
-    <div class="flex flex-wrap gap-2">
-      <a :href="'/api/applications/' + appId + '/export_pdf/'" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-        {% trans "Download PDF" %}
-      </a>
-      <button type="button" @click="runOrchestrator()"
-              class="rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:from-sky-500 hover:to-indigo-500 disabled:opacity-50"
-              :disabled="busy">
-        <span x-show="!busy">{% trans "Run AI pipeline" %}</span>
-        <span x-show="busy" x-cloak>{% trans "Processing…" %}</span>
-      </button>
+    <div class="flex-shrink-0">
+      {% if lw_eligibility_detail and not lw_eligibility_detail.error %}
+        {% if lw_eligibility_detail.decision == 'validated' %}
+        <div class="flex flex-col items-center gap-1 rounded-2xl bg-emerald-50 px-6 py-4 shadow-md ring-2 ring-emerald-400/60 dark:bg-emerald-950/50 dark:ring-emerald-500/50">
+          <span class="text-4xl">✅</span>
+          <span class="text-lg font-bold text-emerald-700 dark:text-emerald-300">{% trans "Éligible" %}</span>
+          {% if application.eligibility_score is not None %}
+          <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Score : {{ application.eligibility_score }}</span>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="flex flex-col items-center gap-1 rounded-2xl bg-rose-50 px-6 py-4 shadow-md ring-2 ring-rose-400/60 dark:bg-rose-950/50 dark:ring-rose-500/50">
+          <span class="text-4xl">❌</span>
+          <span class="text-lg font-bold text-rose-700 dark:text-rose-300">{% trans "Non éligible" %}</span>
+          {% if application.eligibility_score is not None %}
+          <span class="text-sm font-semibold text-rose-600 dark:text-rose-400">Score : {{ application.eligibility_score }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
+      {% else %}
+      <div class="flex flex-col items-center gap-1 rounded-2xl bg-slate-100 px-6 py-4 shadow-sm ring-2 ring-slate-300/60 dark:bg-slate-800/60 dark:ring-slate-600/50">
+        <span class="text-4xl">⏳</span>
+        <span class="text-lg font-bold text-slate-500 dark:text-slate-400">{% trans "En attente" %}</span>
+        <span class="text-xs text-slate-400 dark:text-slate-500">{% trans "Dossier non analysé" %}</span>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -76,12 +83,42 @@
   </div>
   {% endif %}
 
-  {% if lw_eligibility_detail and not lw_eligibility_detail.error %}
+  {% if not lw_portal_backoffice and lw_eligibility_detail and not lw_eligibility_detail.error and lw_eligibility_detail.address_blocker %}
+  <div class="animate-fade-in-up rounded-2xl border border-rose-300/90 bg-rose-50/95 p-4 text-sm text-rose-950 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-100">
+    <p class="font-semibold">{% trans "Action required: address or identity documents" %}</p>
+    <p class="mt-2 leading-relaxed">
+      {% if lw_detail_lang|slice:':2' == 'fr' %}
+      {{ lw_eligibility_detail.user_advice_fr }}
+      {% else %}
+      {{ lw_eligibility_detail.user_advice_en }}
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  {% if lw_portal_backoffice and lw_eligibility_detail and not lw_eligibility_detail.error %}
   <div class="animate-fade-in-up rounded-2xl border border-slate-300/90 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-900/90">
     <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Evaluation detail" %}</h2>
     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-      {% trans "Combines computed score, financial ratios, and policy excerpts from your administrator’s documents (RAG)." %}
+      {% trans "Combines computed score, financial ratios, policy excerpts (RAG), and cross-checks declared figures against amounts and addresses read on your uploads." %}
     </p>
+    {% if lw_eligibility_detail.document_consistency and lw_eligibility_detail.document_consistency.issues %}
+    <div class="mt-3 rounded-lg border border-amber-300/80 bg-amber-50/90 p-3 dark:border-amber-700/60 dark:bg-amber-950/40">
+      <p class="text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200">{% trans "Declared vs documents" %}</p>
+      <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-950 dark:text-amber-100">
+        {% if lw_detail_lang|slice:':2' == 'fr' %}
+          {% for issue in lw_eligibility_detail.document_consistency.issues %}<li>{{ issue.detail_fr }}</li>{% endfor %}
+        {% else %}
+          {% for issue in lw_eligibility_detail.document_consistency.issues %}<li>{{ issue.detail_en }}</li>{% endfor %}
+        {% endif %}
+      </ul>
+      {% if lw_eligibility_detail.document_consistency.score_penalty_points %}
+      <p class="mt-2 text-xs text-amber-900/80 dark:text-amber-200/90">
+        {% blocktrans with p=lw_eligibility_detail.document_consistency.score_penalty_points %}Score adjustment (consistency): −{{ p }} points.{% endblocktrans %}
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
     {% if lw_detail_lang|slice:':2' == 'fr' %}
     <p class="mt-3 text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-100">{{ lw_eligibility_detail.summary_fr }}</p>
     <ul class="mt-3 list-disc space-y-1.5 pl-5 text-sm text-slate-700 dark:text-slate-300">
@@ -154,132 +191,164 @@
 
   <!-- Progress -->
   <div class="animate-fade-in-up animate-delay-1 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-    <div class="mb-4 flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Pipeline progress" %}</h2>
-      <span class="text-xs text-slate-500" x-text="statusLabel"></span>
+    <div class="mb-4">
+      <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Progression du dossier" %}</h2>
     </div>
     <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
       <div class="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-700"
            :style="'width:' + progressPct + '%'"></div>
     </div>
     <p class="mt-3 text-sm text-slate-600 dark:text-slate-400" x-html="progressHint"></p>
+
+    <!-- Checklist documents requis -->
+    <template x-if="pipelineSlots && pipelineSlots.length">
+      <div class="mt-4 space-y-2">
+        <template x-for="slot in pipelineSlots" :key="slot.requirement_id">
+          <div class="flex items-center justify-between rounded-xl border px-4 py-2.5 text-sm transition"
+               :class="slot.uploaded >= slot.files_needed
+                 ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-800/50 dark:bg-emerald-950/30'
+                 : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50'">
+            <span class="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+              <span x-text="docKindIcon(slot.doc_kind)"></span>
+              <span x-text="slot.label"></span>
+            </span>
+            <span class="text-xs font-semibold"
+                  :class="slot.uploaded >= slot.files_needed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'">
+              <template x-if="slot.uploaded >= slot.files_needed">
+                <span>✔ {% trans "Fourni" %}</span>
+              </template>
+              <template x-if="slot.uploaded < slot.files_needed">
+                <span x-text="slot.uploaded + ' / ' + slot.files_needed + ' {% trans "fichier(s)" %}'"></span>
+              </template>
+            </span>
+          </div>
+        </template>
+      </div>
+    </template>
   </div>
 
-  {% if lw_analysis_rows %}
-  <div class="animate-fade-in-up rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
-    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Analysis results" %}</h2>
-    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-      {% trans "Eligibility score is computed from your declared income, amount, and term after document analysis." %}
-    </p>
-    <ul class="mt-4 space-y-4">
-      {% for row in lw_analysis_rows %}
-      <li class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <span class="font-medium text-slate-800 dark:text-slate-100">{{ row.title }}</span>
-          {% if row.ok %}
-          <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">{% trans "OK" %}</span>
-          {% else %}
-          <span class="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950/50 dark:text-rose-200">{% trans "Not OK" %}</span>
-          {% endif %}
-        </div>
-        {% if row.percent is not None %}
-        <div class="mt-3 flex items-center gap-3">
-          <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-            <div class="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500" style="width: {{ row.percent|floatformat:1 }}%"></div>
-          </div>
-          <span class="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ row.percent|floatformat:1 }}%</span>
-        </div>
-        {% endif %}
-        {% if row.detail %}
-        <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{{ row.detail }}</p>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
 
   <div class="grid gap-8 lg:grid-cols-2">
-    <!-- Loan details form (replaces chat) -->
-    <div class="animate-fade-in-up animate-delay-2 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-      <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Loan details" %}</h2>
-      <p class="mt-1 text-xs text-slate-500">{% trans "Fill in all fields before running document analysis and scoring." %}</p>
-      <form class="mt-4 space-y-4" @submit.prevent="saveLoanForm($event)">
-        <div>
-          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_loan_type">{% trans "Loan type" %}</label>
-          <select name="loan_type" id="id_loan_type" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-            {% for val, lbl in lw_loan_type_choices %}
-            <option value="{{ val }}" {% if application.loan_type == val %}selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_language">{% trans "Language" %}</label>
-          <select name="language" id="id_language" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-            {% for val, lbl in lw_language_choices %}
-            <option value="{{ val }}" {% if application.language == val %}selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_amount">{% trans "Amount requested" %}</label>
-            <input name="amount_requested" id="id_amount" type="text" inputmode="decimal" required
-                   value="{{ application.amount_requested|unlocalize }}"
-                   class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950" autocomplete="off">
+    <div class="space-y-6">
+      {% if lw_customer %}
+      <div class="animate-fade-in-up animate-delay-2 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Your profile" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "Personal data comes from your account; it is used for scoring and document checks (e.g. address vs proof of address)." %}</p>
+        <dl class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+          <div class="flex flex-wrap justify-between gap-2"><dt class="text-slate-500">{% trans "Name" %}</dt><dd>{{ lw_customer.first_name }} {{ lw_customer.last_name }}</dd></div>
+          <div class="flex flex-wrap justify-between gap-2"><dt class="text-slate-500">{% trans "ID card number" %}</dt><dd class="font-mono text-xs">{{ lw_customer.id_card }}</dd></div>
+          <div class="flex flex-wrap justify-between gap-2"><dt class="text-slate-500">{% trans "Phone" %}</dt><dd>{{ lw_customer.phone }}</dd></div>
+          <div class="flex flex-wrap justify-between gap-2"><dt class="text-slate-500">{% trans "Address" %}</dt><dd class="max-w-[min(100%,28rem)] text-right">{{ lw_customer.address }}</dd></div>
+          <div class="flex flex-wrap justify-between gap-2"><dt class="text-slate-500">{% trans "Country" %}</dt><dd>{{ lw_customer_country_name }} ({{ lw_customer.country }})</dd></div>
+          <div class="flex flex-wrap justify-between gap-2"><dt class="text-slate-500">{% trans "Income (annual, estimated)" %}</dt><dd class="max-w-[min(100%,22rem)] text-right text-sm">{% if lw_customer.annual_income and lw_customer.annual_income > 0 %}<span class="tabular-nums">{{ lw_customer.annual_income|unlocalize }} {{ lw_customer.income_currency }}</span>{% elif lw_payslip_income_display %}<span class="tabular-nums">{{ lw_payslip_income_display.amount|unlocalize }} {{ lw_payslip_income_display.currency }}</span> <span class="text-xs text-slate-500">({% trans "from payslip analysis" %})</span>{% elif application.effective_annual_income and application.effective_annual_income > 0 %}<span class="tabular-nums">{{ application.effective_annual_income|unlocalize }} {{ lw_customer.income_currency }}</span> <span class="text-xs text-slate-500">({% trans "from payslip analysis" %})</span>{% else %}<span class="text-slate-500">{% trans "Upload payslips; the AI will estimate annual income from the last months." %}</span>{% endif %}</dd></div>
+        </dl>
+      </div>
+      {% endif %}
+
+      <div class="animate-fade-in-up animate-delay-2 rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Loan request" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "Only the amount and duration are entered here; income and identity are taken from your profile." %}</p>
+        <div class="mt-4 space-y-4">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_amount">{% trans "Amount requested" %}</label>
+              <input name="amount_requested" id="id_amount" type="text" inputmode="decimal" required
+                     x-model="loanAmount"
+                     class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950" autocomplete="off">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_amount_currency">{% trans "Currency" %}</label>
+              <select name="amount_currency" id="id_amount_currency" x-model="loanCurrency" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+                {% for val, lbl in lw_currency_choices %}
+                <option value="{{ val }}" {% if application.amount_currency == val %}selected{% elif not application.amount_currency and lw_customer and lw_customer.income_currency == val %}selected{% endif %}>{{ val }} — {{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_term">{% trans "Term (months)" %}</label>
+              <input name="term_months" id="id_term" type="number" min="1" max="600" required
+                     x-model.number="loanTerm"
+                     class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950">
+            </div>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_term">{% trans "Term (months)" %}</label>
-            <input name="term_months" id="id_term" type="number" min="1" max="600" required
-                   value="{{ application.term_months|unlocalize }}"
-                   class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950">
-          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Ces informations sont sauvegardées automatiquement lors de l'analyse." %}</p>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_income">{% trans "Annual income" %}</label>
-          <input name="annual_income" id="id_income" type="text" inputmode="decimal" required
-                 value="{{ application.annual_income|unlocalize }}"
-                 class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950" autocomplete="off">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-600 dark:text-slate-400" for="id_purpose">{% trans "Purpose" %}</label>
-          <textarea name="purpose" id="id_purpose" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">{{ application.purpose }}</textarea>
-        </div>
-        <button type="submit" class="w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500 disabled:opacity-50" :disabled="formBusy">
-          <span x-show="!formBusy">{% trans "Save" %}</span>
-          <span x-show="formBusy" x-cloak>{% trans "Saving…" %}</span>
-        </button>
-      </form>
+      </div>
     </div>
 
-    <!-- Upload + ROI -->
+    <!-- Documents section -->
     <div class="space-y-6">
+
+      {% if lw_has_been_analyzed %}
+      {# ── Post-analyse : afficher les documents fournis (téléchargeables par backoffice) ── #}
       <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Required documents" %}</h2>
-        <p class="mt-1 text-xs text-slate-500">{% trans "CNI or passport, proof of address, and three payslips where applicable. Files are hashed (SHA-256) and removed after analysis." %}</p>
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents fournis" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "Pièces justificatives déposées pour cette demande. Le backoffice peut les télécharger." %}</p>
+
+        {% if lw_app_documents %}
+        <ul class="mt-4 space-y-2">
+          {% for doc in lw_app_documents %}
+          <li class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="text-xl flex-shrink-0">
+                {% if doc.kind == 'national_id' %}🪪
+                {% elif doc.kind == 'passport' %}🛂
+                {% elif doc.kind == 'proof_of_address' %}🏠
+                {% elif doc.kind == 'payslip' %}💼
+                {% elif doc.kind == 'bank_statement' %}🏦
+                {% elif doc.kind == 'business_plan' %}📊
+                {% elif doc.kind == 'tax_return' %}🧾
+                {% else %}📄{% endif %}
+              </span>
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ doc.original_filename }}</p>
+                <p class="text-xs text-slate-500">{{ doc.get_kind_display }} · {{ doc.file_size|filesizeformat }}</p>
+              </div>
+            </div>
+            {% if lw_portal_backoffice %}
+            <a href="/api/documents/{{ doc.pk }}/download/"
+               target="_blank"
+               class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-sky-400">
+              ⬇ {% trans "Télécharger" %}
+            </a>
+            {% else %}
+            <span class="flex-shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">✔ {% trans "Fourni" %}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="mt-4 text-sm text-slate-500">{% trans "Aucun document trouvé." %}</p>
+        {% endif %}
+      </div>
+
+      {% else %}
+      {# ── Avant analyse : matrice d'upload normale ── #}
+      <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents requis" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "Déposez votre pièce d'identité, un justificatif de domicile et vos bulletins de salaire." %}</p>
         <div class="mt-4">
           {% include "loanwise/components/file_upload_matrix.html" with lw_upload_app_id=application.id %}
         </div>
       </div>
+      {% endif %}
 
-      <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-xl dark:border-slate-700">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-sky-300">{% trans "ROI & impact" %}</h2>
-        <dl class="mt-4 space-y-2 text-sm">
-          <div class="flex justify-between"><dt>{% trans "Score" %}</dt><dd class="font-semibold">{{ application.eligibility_score|default:"—" }}</dd></div>
-          <div class="flex justify-between"><dt>{% trans "Principal" %}</dt><dd>{{ application.amount_requested }}</dd></div>
-        </dl>
-        <p class="mt-4 text-xs text-slate-300">{% trans "Figures are indicative for the hackathon demo." %}</p>
-      </div>
     </div>
   </div>
 
-  {% if lw_ai_debug_json %}
-  <div class="animate-fade-in-up rounded-2xl border border-amber-400/60 bg-amber-50/90 p-4 dark:border-amber-700 dark:bg-amber-950/40">
-    <h2 class="text-sm font-semibold text-amber-950 dark:text-amber-100">{% trans "AI analysis output (development only)" %}</h2>
-    <p class="mt-1 text-xs text-amber-900/80 dark:text-amber-200/90">{% trans "Orchestration log and document analysis payloads — visible when DEBUG is true." %}</p>
-    <pre class="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-4 font-mono text-[11px] leading-relaxed text-emerald-200">{{ lw_ai_debug_json }}</pre>
+  <div class="animate-fade-in-up flex flex-wrap justify-end gap-3 pt-2">
+    <a :href="'/api/applications/' + appId + '/export_pdf/'" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      {% trans "Download PDF" %}
+    </a>
+    {% if not lw_has_been_analyzed %}
+    <button type="button" @click="runOrchestrator()"
+            class="rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:from-sky-500 hover:to-indigo-500 disabled:opacity-50"
+            :disabled="busy || !canRunPipeline()">
+      <span x-show="!busy">{% trans "Analyser ma demande" %}</span>
+      <span x-show="busy" x-cloak>{% trans "Processing…" %}</span>
+    </button>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 {% endblock %}
 
@@ -289,16 +358,24 @@
   function appWorkspace(appId, opts) {
     opts = opts || {};
     var ip = typeof opts.initialProgress === 'number' ? opts.initialProgress : 15;
+    var lt = opts.loanTerm;
+    if (lt !== null && lt !== undefined && lt !== '') {
+      var n = parseInt(String(lt), 10);
+      lt = Number.isFinite(n) ? n : null;
+    } else {
+      lt = null;
+    }
     return {
       appId,
-      requireEmail: !!opts.requireEmail,
-      emailVerified: !!opts.emailVerified,
+      loanAmount: opts.loanAmount != null ? String(opts.loanAmount) : '',
+      loanTerm: lt,
+      loanCurrency: (opts.loanCurrency || 'EUR').toString().slice(0, 3).toUpperCase(),
+      pipelineSlots: [],
       csrf: '',
-      formBusy: false,
       busy: false,
       progressPct: ip,
       statusLabel: '{{ application.get_status_display|escapejs }}',
-      progressHint: '{% filter escapejs %}{% trans "Save your loan details, upload documents, then run the AI pipeline." %}{% endfilter %}',
+      progressHint: '{% filter escapejs %}{% trans "Renseignez le montant, la devise, la durée et fournissez tous les documents requis pour que votre dossier soit complet." %}{% endfilter %}',
       getCookie(name) {
         const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
         return v ? decodeURIComponent(v[2]) : '';
@@ -320,20 +397,87 @@
         const n = parseFloat(s);
         return Number.isFinite(n) ? String(n) : '0';
       },
-      async saveLoanForm(ev) {
-        const form = ev.target;
-        const fd = new FormData(form);
-        const body = {
-          loan_type: fd.get('loan_type') || 'personal',
-          language: fd.get('language') || 'fr',
-          amount_requested: this.parseDecimal(fd.get('amount_requested')),
-          term_months: parseInt(String(fd.get('term_months') || '12'), 10) || 12,
-          annual_income: this.parseDecimal(fd.get('annual_income')),
-          purpose: (fd.get('purpose') || '').toString().slice(0, 2000),
-        };
-        this.formBusy = true;
+      init() {
+        const el = document.getElementById('lw-upload-matrix-data');
+        let data = { slots: [] };
         try {
-          const res = await fetch('/api/applications/' + this.appId + '/', {
+          data = el ? JSON.parse(el.textContent) : { slots: [] };
+        } catch (e) {
+          data = { slots: [] };
+        }
+        this.pipelineSlots = (data.slots || []).map(function (s) {
+          return {
+            requirement_id: s.requirement_id,
+            code: s.code,
+            label: s.label,
+            description: s.description,
+            files_needed: Math.max(1, parseInt(s.files_needed, 10) || 1),
+            doc_kind: s.doc_kind,
+            uploaded: typeof s.uploaded === 'number' ? s.uploaded : 0,
+          };
+        });
+      },
+      onFileUploaded(ev) {
+        const d = ev.detail || {};
+        const rid = d.requirement_id;
+        if (rid === undefined || rid === null || !this.pipelineSlots || !this.pipelineSlots.length) return;
+        const s = this.pipelineSlots.find(function (x) {
+          return String(x.requirement_id) === String(rid);
+        });
+        if (!s) return;
+        if (typeof d.uploaded === 'number') {
+          s.uploaded = d.uploaded;
+          return;
+        }
+        s.uploaded = Math.min(s.files_needed || 1, (s.uploaded || 0) + 1);
+      },
+      loanFieldsOk() {
+        const amt = parseFloat(this.parseDecimal(this.loanAmount));
+        const term = parseInt(String(this.loanTerm != null ? this.loanTerm : ''), 10);
+        const cur = (this.loanCurrency || '').trim().toUpperCase();
+        return (
+          amt > 0 &&
+          Number.isFinite(amt) &&
+          term >= 1 &&
+          Number.isFinite(term) &&
+          cur.length === 3
+        );
+      },
+      docKindIcon(kind) {
+        const icons = {
+          national_id: '🪪',
+          passport: '🛂',
+          proof_of_address: '🏠',
+          payslip: '💼',
+          bank_statement: '🏦',
+          business_plan: '📊',
+          tax_return: '🧾',
+          other: '📄',
+        };
+        return icons[kind] || '📄';
+      },
+      docsComplete() {
+        const sl = this.pipelineSlots || [];
+        if (!sl.length) return true;
+        return sl.every(function (s) {
+          return (s.uploaded || 0) >= (s.files_needed || 1);
+        });
+      },
+      canRunPipeline() {
+        return this.loanFieldsOk() && this.docsComplete();
+      },
+      async runOrchestrator() {
+        if (!this.canRunPipeline()) return;
+        this.busy = true;
+        this.progressPct = Math.max(this.progressPct, 45);
+        this.progressHint = '{% filter escapejs %}{% trans "Running document analysis and scoring…" %}{% endfilter %}';
+        try {
+          const patchBody = {
+            amount_requested: this.parseDecimal(this.loanAmount),
+            amount_currency: (this.loanCurrency || 'EUR').toString().slice(0, 3).toUpperCase(),
+            term_months: parseInt(String(this.loanTerm || '12'), 10) || 12,
+          };
+          const patchRes = await fetch('/api/applications/' + this.appId + '/', {
             method: 'PATCH',
             credentials: 'same-origin',
             headers: {
@@ -341,29 +485,20 @@
               Accept: 'application/json',
               'X-CSRFToken': this.getCookie('csrftoken'),
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify(patchBody),
           });
-          const text = await res.text();
-          let data = {};
-          try { data = text ? JSON.parse(text) : {}; } catch (e) { data = {}; }
-          if (!res.ok) {
-            alert(this.lwApiErrorDetail(data) || ('HTTP ' + res.status));
+          const patchText = await patchRes.text();
+          let patchData = {};
+          try {
+            patchData = patchText ? JSON.parse(patchText) : {};
+          } catch (e) {
+            patchData = {};
+          }
+          if (!patchRes.ok) {
+            alert(this.lwApiErrorDetail(patchData) || ('HTTP ' + patchRes.status));
             return;
           }
-          this.progressPct = Math.min(88, Math.max(this.progressPct, 45));
-          window.location.reload();
-        } catch (e) {
-          console.warn('saveLoanForm', e);
-          alert('{% filter escapejs %}{% trans "Could not save. Check your connection." %}{% endfilter %}');
-        } finally {
-          this.formBusy = false;
-        }
-      },
-      async runOrchestrator() {
-        this.busy = true;
-        this.progressPct = Math.max(this.progressPct, 45);
-        this.progressHint = '{% filter escapejs %}{% trans "Running document analysis and scoring…" %}{% endfilter %}';
-        try {
+
           const res = await fetch('/api/applications/' + this.appId + '/orchestrate/', {
             method: 'POST',
             credentials: 'same-origin',
@@ -384,10 +519,7 @@
           const errMsg = this.lwApiErrorDetail(data);
 
           if (!res.ok) {
-            if (res.status === 403 && this.requireEmail) {
-              this.progressPct = Math.min(this.progressPct, 60);
-              alert('{% trans "Please verify your email before running the pipeline." %}');
-            } else {
+            {
               this.progressPct = Math.min(this.progressPct, 70);
               alert(errMsg || ('HTTP ' + res.status));
             }
@@ -399,9 +531,9 @@
 
           if (pipeline.blocked) {
             this.progressPct = Math.min(this.progressPct, 55);
-            this.progressHint = '{% filter escapejs %}{% trans "Upload all required documents, then run the pipeline again." %}{% endfilter %}';
+            this.progressHint = '{% filter escapejs %}{% trans "Documents et informations incomplets. Veuillez compléter votre dossier avant de relancer l\'analyse." %}{% endfilter %}';
             const labels = pipeline.missing_document_labels || pipeline.missing_documents || [];
-            const intro = '{% filter escapejs %}{% trans "The pipeline cannot run until these required documents are uploaded:" %}{% endfilter %}';
+            const intro = '{% filter escapejs %}{% trans "Les documents suivants sont requis pour compléter votre dossier :" %}{% endfilter %}';
             alert(labels.length ? (intro + '\n\n• ' + labels.join('\n• ')) : intro);
             return;
           }

@@ -12,6 +12,15 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+msgid "Eligibility"
+msgstr "Éligibilité"
+
+msgid "Eligible"
+msgstr "Éligible"
+
+msgid "Not eligible"
+msgstr "Non éligible"
+
 msgid "Account created. Check your email for your verification code."
 msgstr ""
 "Compte créé. Consultez votre e-mail pour obtenir le code de vérification."
@@ -626,3 +635,6 @@ msgstr "Votre e-mail est vérifié. Bienvenue !"
 
 msgid "— optional —"
 msgstr "— facultatif —"
+
+msgid "An account already exists with this email address. Please log in instead."
+msgstr "Un compte existe déjà avec cette adresse e-mail. Veuillez vous connecter."

@@ -4,46 +4,185 @@
 {% block title %}{% trans "Backoffice" %} — {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="animate-fade-in-up space-y-8">
+<div class="animate-fade-in-up space-y-6"
+     x-data="backofficeTable()"
+     x-init="init()">
+
+  <!-- Header -->
   <div class="rounded-2xl border border-violet-500/30 bg-gradient-to-br from-violet-950/40 to-slate-900/80 p-6 dark:border-violet-700/40">
     <p class="text-xs font-semibold uppercase tracking-wider text-violet-300">{% trans "Bank backoffice" %}</p>
-    <h1 class="mt-2 text-3xl font-bold text-white">{% trans "All loan applications" %}</h1>
-    <p class="mt-1 text-sm text-violet-200/90">{% trans "Read-only overview of every customer request. Open a row to view the full workspace." %}</p>
+    <h1 class="mt-1 text-2xl font-bold text-white">{% trans "All loan applications" %}</h1>
   </div>
 
-  {% if not applications %}
-  <div class="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
-    <p class="text-slate-600 dark:text-slate-300">{% trans "No applications yet." %}</p>
+  <!-- Filters -->
+  <div class="rounded-2xl border border-slate-200 bg-white/90 px-5 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+    <div class="flex flex-wrap items-end gap-4">
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Eligibility" %}</label>
+        <select x-model="filterStatus"
+                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-sky-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 min-w-[150px]">
+          <option value="">{% trans "All" %}</option>
+          <option value="eligible">{% get_current_language as cur_lang %}{% if cur_lang == "fr" %}Éligible{% else %}Eligible{% endif %}</option>
+          <option value="not_eligible">{% get_current_language as cur_lang %}{% if cur_lang == "fr" %}Non éligible{% else %}Not eligible{% endif %}</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Type" %}</label>
+        <select x-model="filterType"
+                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-sky-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 min-w-[150px]">
+          <option value="">{% trans "All" %}</option>
+          <option value="personal">{% trans "Personal loan" %}</option>
+          <option value="mortgage">{% trans "Mortgage" %}</option>
+          <option value="business">{% trans "Business loan" %}</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "From" %}</label>
+        <input type="date" x-model="filterFrom"
+               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-sky-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "To" %}</label>
+        <input type="date" x-model="filterTo"
+               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-sky-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      </div>
+      <button type="button" @click="reset()"
+              class="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 self-end">
+        ↺ {% trans "Reset" %}
+      </button>
+      <span class="ml-auto self-end text-xs text-slate-400 dark:text-slate-500 pb-2"
+            x-text="visibleCount() + ' {% filter escapejs %}{% trans 'result(s)' %}{% endfilter %}'"></span>
+    </div>
   </div>
-  {% else %}
-  <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
-    <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-      <thead class="bg-slate-50 dark:bg-slate-900/80">
-        <tr>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Reference" %}</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Applicant" %}</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Type" %}</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Status" %}</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">{% trans "Created" %}</th>
-          <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-        {% for app in applications %}
-        <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
-          <td class="px-4 py-3 font-mono text-xs text-sky-700 dark:text-sky-400">{{ app.reference }}</td>
-          <td class="px-4 py-3 text-slate-800 dark:text-slate-100">{{ app.user.email }}</td>
-          <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ app.get_loan_type_display }}</td>
-          <td class="px-4 py-3">{{ app.get_status_display }}</td>
-          <td class="px-4 py-3 text-slate-500">{{ app.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-          <td class="px-4 py-3 text-right">
-            <a href="{% url 'application_detail' app.pk %}" class="inline-flex rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500">{% trans "Open" %}</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
+  <!-- Table -->
+  <div class="rounded-2xl border border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/90 overflow-hidden">
+    {% if not applications %}
+    <div class="p-12 text-center text-slate-500 dark:text-slate-400">{% trans "No applications yet." %}</div>
+    {% else %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60">
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Reference" %}</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden md:table-cell">{% trans "Applicant" %}</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Type" %}</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Amount" %}</th>
+            <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Term" %}</th>
+            <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Status" %}</th>
+            <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Eligibility" %}</th>
+            <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Date" %}</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in applications %}
+          <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-violet-50/40 dark:hover:bg-violet-950/20 transition-colors"
+              x-show="showRow('{% if app.eligibility_score is not None %}{% if app.eligibility_score >= 55 %}eligible{% else %}not_eligible{% endif %}{% endif %}','{{ app.loan_type }}','{{ app.created_at|date:'Y-m-d' }}')"
+              x-cloak>
+            <td class="px-4 py-3">
+              <span class="font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">{{ app.reference }}</span>
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 hidden md:table-cell max-w-[160px] truncate">
+              {{ app.user.email }}
+            </td>
+            <td class="px-4 py-3 text-slate-700 dark:text-slate-200">{{ app.get_loan_type_display }}</td>
+            <td class="px-4 py-3 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100 whitespace-nowrap">
+              {{ app.amount_requested|floatformat:2 }} {{ app.amount_currency }}
+            </td>
+            <td class="px-4 py-3 text-center text-slate-600 dark:text-slate-300 whitespace-nowrap">
+              {% if app.term_months %}{{ app.term_months }} {% trans "mo." %}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-3 text-center">
+              {% if app.status == 'validated' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {{ app.get_status_display }}</span>
+              {% elif app.status == 'rejected' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {{ app.get_status_display }}</span>
+              {% elif app.status == 'pending' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">⏳ {{ app.get_status_display }}</span>
+              {% elif app.status == 'closed' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">🔒 {{ app.get_status_display }}</span>
+              {% elif app.status == 'in_progress' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">🔄 {{ app.get_status_display }}</span>
+              {% elif app.status == 'under_review' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">🔍 {{ app.get_status_display }}</span>
+              {% elif app.status == 'canceled' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">✕ {{ app.get_status_display }}</span>
+              {% elif app.status == 'in_review' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">🔍 {{ app.get_status_display }}</span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ app.get_status_display }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-center">
+              {% if app.eligibility_score is not None %}
+                {% if app.eligibility_score >= 55 %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {% get_current_language as cur_lang %}{% if cur_lang == "fr" %}Éligible{% else %}Eligible{% endif %}</span>
+                {% else %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% get_current_language as cur_lang %}{% if cur_lang == "fr" %}Non éligible{% else %}Not eligible{% endif %}</span>
+                {% endif %}
+              {% else %}
+              <span class="text-slate-400 dark:text-slate-500">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-center text-xs text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
+              {{ app.created_at|date:"d/m/Y" }}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <a href="{% url 'application_detail' app.pk %}"
+                 class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-violet-600 hover:border-violet-600 hover:text-white transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 whitespace-nowrap">
+                {% trans "View" %} →
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div x-show="visibleCount() === 0" x-cloak
+         class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+      {% trans "No applications match the selected filters." %}
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
+
 </div>
+
+<script>
+function backofficeTable() {
+  return {
+    filterStatus: '',
+    filterType: '',
+    filterFrom: '',
+    filterTo: '',
+    rows: [],
+    init() {
+      this.rows = Array.from(this.$el.querySelectorAll('tbody tr')).map(function(tr) {
+        var show = tr.getAttribute('x-show') || '';
+        var m = show.match(/'([^']+)','([^']+)','([^']+)'/);
+        return m ? { status: m[1], type: m[2], date: m[3] } : { status:'', type:'', date:'' };
+      });
+    },
+    showRow(eligibility, type, dateStr) {
+      if (this.filterStatus && eligibility !== this.filterStatus) return false;
+      if (this.filterType && type !== this.filterType) return false;
+      if (this.filterFrom && dateStr < this.filterFrom) return false;
+      if (this.filterTo && dateStr > this.filterTo) return false;
+      return true;
+    },
+    visibleCount() {
+      var self = this;
+      return this.rows.filter(function(r) {
+        return self.showRow(r.status, r.type, r.date);
+      }).length;
+    },
+    reset() {
+      this.filterStatus = '';
+      this.filterType = '';
+      this.filterFrom = '';
+      this.filterTo = '';
+    }
+  };
+}
+</script>
 {% endblock %}

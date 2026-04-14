@@ -1,8 +1,8 @@
 """
 Django admin: user management (including deletion), applications, and API tokens.
 
-Suppression d’un utilisateur supprime en cascade ses demandes de prêt, documents,
-messages et jetons (FK `CASCADE`).
+Suppression d’un utilisateur : DELETE réel en base ; les objets liés en CASCADE
+(demandes, documents, jetons, etc.) sont supprimés avec le compte.
 """
 
 from __future__ import annotations
@@ -10,18 +10,14 @@ from __future__ import annotations
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.translation import gettext_lazy as _
 from rest_framework.authtoken.models import Token
-
+from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
 from core.models import (
     ApplicationDocument,
     BackOffice,
-    ChatMessage,
     Customer,
-    DocumentRequirement,
-    EmailVerificationToken,
     EligibilityKnowledgeSource,
     IntegrationSettings,
     LoanApplication,
@@ -41,7 +37,7 @@ admin.site.index_title = _("Applications & users")
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    """Liste + fiche utilisateur : suppression possible (action ou bouton « Supprimer »)."""
+    """Liste + fiche utilisateur : suppression = effacement réel (CASCADE)."""
 
     ordering = ("-date_joined",)
     list_per_page = 50
@@ -49,11 +45,9 @@ class UserAdmin(BaseUserAdmin):
 
     list_display = (
         "email",
-        "username",
         "first_name",
         "last_name",
         "portal_role",
-        "email_verified",
         "preferred_language",
         "is_active",
         "is_staff",
@@ -66,15 +60,14 @@ class UserAdmin(BaseUserAdmin):
         "is_staff",
         "is_superuser",
         "is_active",
-        "email_verified",
         "preferred_language",
     )
-    search_fields = ("email", "username", "first_name", "last_name")
+    search_fields = ("email", "first_name", "last_name")
 
     fieldsets = (
-        (None, {"fields": ("email", "username", "password")}),
+        (None, {"fields": ("email", "password")}),
         (_("Personal info"), {"fields": ("first_name", "last_name")}),
-        (_("Preferences"), {"fields": ("preferred_language", "theme_preference", "email_verified", "portal_role")}),
+        (_("Preferences"), {"fields": ("preferred_language", "theme_preference", "portal_role")}),
         (_("Permissions"), {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
@@ -83,7 +76,7 @@ class UserAdmin(BaseUserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("email", "username", "password1", "password2", "portal_role"),
+                "fields": ("email", "password1", "password2", "portal_role"),
             },
         ),
     )
@@ -105,7 +98,7 @@ class TokenAdmin(admin.ModelAdmin):
     """Jetons API REST ; supprimés en cascade si l’utilisateur est effacé."""
 
     list_display = ("user", "created")
-    search_fields = ("user__email", "user__username", "key")
+    search_fields = ("user__email", "key")
     raw_id_fields = ("user",)
     ordering = ("-created",)
 
@@ -119,9 +112,28 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(BackOffice)
 class BackOfficeAdmin(admin.ModelAdmin):
-    list_display = ("email", "first_name", "last_name", "cin_number", "user", "created_at")
-    search_fields = ("email", "first_name", "last_name", "cin_number")
-    raw_id_fields = ("user",)
+    list_display = ("user", "email", "first_name", "last_name", "created_at")
+    search_fields = ("email", "first_name", "last_name", "user__email")
+    fields = ("user",)
+
+    def save_model(self, request, obj, form, change):
+        """Promote the selected user to backoffice and copy their info automatically."""
+        from core.models import Customer, PortalRole
+        user = obj.user
+        if user:
+            user.portal_role = PortalRole.BACKOFFICE
+            user.save(update_fields=["portal_role"])
+            # Remove customer profile so they no longer appear in the Customer section
+            Customer.objects.filter(user=user).delete()
+            # Use update_or_create to avoid UNIQUE constraint on user_id
+            BackOffice.objects.update_or_create(
+                user=user,
+                defaults={
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "email": user.email,
+                },
+            )
 
 
 @admin.register(LoanApplication)
@@ -144,28 +156,6 @@ class NotificationAdmin(admin.ModelAdmin):
 class ApplicationDocumentAdmin(admin.ModelAdmin):
     list_display = ("original_filename", "application", "sha256_hex", "analyzed_at", "deleted_at")
     raw_id_fields = ("application", "requirement")
-
-
-@admin.register(DocumentRequirement)
-class DocumentRequirementAdmin(admin.ModelAdmin):
-    list_display = ("code", "label_en", "is_required", "min_files", "sort_order", "active")
-    list_filter = ("active", "is_required")
-    search_fields = ("code", "label_en", "label_fr")
-
-
-@admin.register(ChatMessage)
-class ChatMessageAdmin(admin.ModelAdmin):
-    list_display = ("application", "role", "created_at")
-    list_filter = ("role",)
-    raw_id_fields = ("application",)
-    search_fields = ("content",)
-
-
-@admin.register(EmailVerificationToken)
-class EmailVerificationTokenAdmin(admin.ModelAdmin):
-    list_display = ("user", "code", "created_at", "consumed_at")
-    raw_id_fields = ("user",)
-    search_fields = ("token", "code", "user__email")
 
 
 @admin.register(EligibilityKnowledgeSource)
@@ -209,9 +199,8 @@ class IntegrationSettingsForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["openai_api_key"].widget = forms.PasswordInput(
-            render_value=False,
-            attrs={"autocomplete": "off", "size": "72"},
+        self.fields["openai_api_key"].widget = forms.TextInput(
+            attrs={"autocomplete": "off", "size": "72", "style": "font-family: monospace;"},
         )
         self.fields["openai_api_key"].required = False
         self.fields["openai_api_key"].label = _("OpenAI API key")

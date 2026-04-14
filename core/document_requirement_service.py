@@ -101,6 +101,7 @@ def seed_default_requirements() -> int:
             "applies_to_loan_types": [LoanType.PERSONAL, LoanType.MORTGAGE, LoanType.BUSINESS],
             "is_required": True,
             "min_files": 3,
+            "payslip_distinct_months_window": 3,
             "sort_order": 30,
         },
         {
@@ -119,10 +120,15 @@ def seed_default_requirements() -> int:
     for row in defaults:
         code = row["code"]
         min_files = row.get("min_files", 1)
-        data = {k: v for k, v in row.items() if k != "min_files"}
+        data = {k: v for k, v in row.items() if k != "min_files" and k != "payslip_distinct_months_window"}
+        payslip_w = row.get("payslip_distinct_months_window")
         obj, was_created = DocumentRequirement.objects.get_or_create(
             code=code,
-            defaults={**data, "min_files": min_files},
+            defaults={
+                **data,
+                "min_files": min_files,
+                **({"payslip_distinct_months_window": payslip_w} if payslip_w is not None else {}),
+            },
         )
         if was_created:
             created += 1
@@ -135,6 +141,9 @@ def seed_default_requirements() -> int:
             if obj.min_files != min_files:
                 obj.min_files = min_files
                 updates.append("min_files")
+            if payslip_w is not None and getattr(obj, "payslip_distinct_months_window", None) != payslip_w:
+                obj.payslip_distinct_months_window = payslip_w
+                updates.append("payslip_distinct_months_window")
             if updates:
                 obj.save(update_fields=list(set(updates)))
     return created

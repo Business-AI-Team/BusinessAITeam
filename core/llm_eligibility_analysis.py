@@ -20,7 +20,9 @@ from core.openai_config import get_openai_api_key
 
 logger = logging.getLogger(__name__)
 
-_ENGINE_KEYS = frozenset({"score", "threshold", "decision", "financial_inputs_complete"})
+_ENGINE_KEYS = frozenset(
+    {"score", "threshold", "decision", "financial_inputs_complete", "identity_address_block"}
+)
 
 
 def serialize_uploaded_document_texts_for_llm(application: Any) -> list[dict[str, Any]]:
@@ -92,6 +94,13 @@ def invoke_full_context_eligibility_llm(
         "Do NOT infer eligibility from applicant form fields — those are not provided here on purpose. "
         "You may use the small AUTOMATED ENGINE block only as a numeric cross-check (score vs threshold), "
         "not as a substitute for citing policy wording. "
+        "Hard rule on addresses: if AUTOMATED ENGINE contains identity_address_block=true, or if document analyses "
+        "show that the PROOF-OF-ADDRESS document address cannot be reconciled with the applicant's declared home, "
+        "you MUST set llm_decision to not_eligible (or manual_review if genuinely ambiguous) and explain that "
+        "the proof of address must match the declared residence. "
+        "IMPORTANT EXCEPTION: a national ID card (CIN) or passport showing a different address from the profile "
+        "is NOT a reason to reject — people often have a birth address or old address on their ID. "
+        "Only flag mismatches between the proof-of-address document and the declared home address. "
         "Quote or paraphrase the policy documents when explaining. "
         "Reply with JSON only, no markdown. Schema: "
         + schema

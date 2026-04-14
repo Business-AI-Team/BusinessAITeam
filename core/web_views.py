@@ -4,10 +4,9 @@ Server-rendered pages (marketing + dashboard). Uses Django sessions; API remains
 
 from __future__ import annotations
 
-import json
-
 from django.contrib import messages
 from django.contrib.auth import login, logout
+from django.db import IntegrityError
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -16,7 +15,7 @@ from django.views.decorators.http import require_http_methods
 
 from django.conf import settings as django_settings
 
-from core.application_ui import application_pipeline_progress_percent
+from core.application_ui import application_pipeline_progress_percent, income_display_for_payslip_estimate
 from core.analysis_display import analysis_rows_for_template
 from core.document_requirement_service import (
     default_doc_kind_for_requirement_code,
@@ -26,8 +25,9 @@ from core.document_requirement_service import (
     requirements_for_application,
     seed_default_requirements,
 )
-from core.models import Language, LoanApplication, LoanType
+from core.models import Currency, Language, LoanApplication, LoanType
 from core.portal import can_access_all_applications, get_loan_application_for_portal, is_backoffice_user
+from core.countries_data import country_display_name
 from core.rag_eligibility import get_eligibility_guidance_from_rag
 
 
@@ -51,41 +51,44 @@ def register_page(request: HttpRequest) -> HttpResponse:
 
         ser = RegisterSerializer(data=request.POST)
         if ser.is_valid():
-            user = ser.save()
-            from django.conf import settings
-
-            from core.email_verification_service import send_registration_verification_email
-            from core.models import EmailVerificationToken
-
-            if getattr(settings, "LOANWISE_AUTO_VERIFY_EMAIL_IN_DEBUG", False) and settings.DEBUG:
-                user.email_verified = True
-                user.save(update_fields=["email_verified"])
-
-            evt = EmailVerificationToken.create_for_user(user)
-            verify_url = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/api/auth/verify/?token={evt.token}"
             try:
-                send_registration_verification_email(user, evt)
-            except Exception:
-                messages.warning(
+                user = ser.save()
+            except IntegrityError:
+                from core.countries_data import COUNTRY_CHOICES
+
+                return render(
                     request,
-                    _("We could not send the email. Enter the code from the server log or ask an administrator."),
+                    "loanwise/register.html",
+                    {
+                        "lw_countries": COUNTRY_CHOICES,
+                        "lw_email_taken": True,
+                    },
                 )
-            if user.email_verified and getattr(settings, "LOANWISE_AUTO_VERIFY_EMAIL_IN_DEBUG", False):
-                messages.success(request, _("Account created. You can log in — your email is marked verified in development."))
-            else:
-                messages.success(request, _("Account created. Check your email for your verification code."))
-            if not user.email_verified and (getattr(settings, "DEBUG", False) or "console" in settings.EMAIL_BACKEND.lower()):
-                messages.info(
-                    request,
-                    _(
-                        "Development: the email is printed in the runserver terminal. Your verification code is %(code)s. "
-                        "You can also open: %(url)s"
-                    )
-                    % {"code": evt.code, "url": verify_url},
-                )
+            messages.success(request, _("Account created. You can now log in."))
             return redirect("login_page")
+        from core.countries_data import COUNTRY_CHOICES
+
+        email_taken = bool(ser.errors.get("email") and any(
+            "already exists" in str(e) for e in ser.errors["email"]
+        ))
+        if email_taken:
+            return render(request, "loanwise/register.html", {
+                "lw_countries": COUNTRY_CHOICES,
+                "lw_email_taken": True,
+            })
         messages.error(request, _("Please correct the errors below."))
-    return render(request, "loanwise/register.html")
+        return render(
+            request,
+            "loanwise/register.html",
+            {"lw_countries": COUNTRY_CHOICES, "lw_register_errors": ser.errors},
+        )
+    from core.countries_data import COUNTRY_CHOICES
+
+    return render(
+        request,
+        "loanwise/register.html",
+        {"lw_countries": COUNTRY_CHOICES},
+    )
 
 
 @require_http_methods(["GET", "POST"])
@@ -106,49 +109,6 @@ def login_page(request: HttpRequest) -> HttpResponse:
         messages.error(request, _("Invalid email or password."))
     return render(request, "loanwise/login.html")
 
-
-@require_http_methods(["GET", "POST"])
-def verify_email_page(request: HttpRequest) -> HttpResponse:
-    """Enter email + numeric code from the registration email."""
-    from django.contrib.auth import get_user_model
-
-    from core.email_verification_service import verify_email_with_code
-
-    if request.user.is_authenticated and request.user.email_verified:
-        return redirect("backoffice_dashboard" if is_backoffice_user(request.user) else "dashboard")
-
-    if request.method == "POST":
-        email = (request.POST.get("email") or "").strip()
-        code = (request.POST.get("code") or "").strip()
-        ok, detail = verify_email_with_code(email, code)
-        if ok:
-            User = get_user_model()
-            user = User.objects.filter(email__iexact=email.lower()).first()
-            if user:
-                from django.contrib.auth import login
-
-                login(request, user)
-            if detail == "already_verified":
-                messages.info(request, _("This email was already verified. You are signed in."))
-            else:
-                messages.success(request, _("Your email is verified. Welcome!"))
-            return redirect("backoffice_dashboard" if is_backoffice_user(request.user) else "dashboard")
-        if detail == "email_and_code_required":
-            messages.error(request, _("Please enter your email and the verification code."))
-        elif detail == "invalid_code":
-            messages.error(request, _("The code must contain exactly six digits."))
-        else:
-            messages.error(request, _("Invalid email or verification code. Check the code in your email and try again."))
-        return render(
-            request,
-            "loanwise/verify_email.html",
-            {"prefill_email": email},
-        )
-
-    prefill = ""
-    if request.user.is_authenticated:
-        prefill = request.user.email
-    return render(request, "loanwise/verify_email.html", {"prefill_email": prefill})
 
 
 @login_required
@@ -219,8 +179,19 @@ def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
     matrix_script_data = {"slots": matrix_slots}
 
     roi = app.roi_summary or {}
+    cust = getattr(app, "customer", None)
+    cust_country_name = country_display_name(getattr(cust, "country", None), lang) if cust else ""
+
+    # True once the AI pipeline has been run at least once
+    has_been_analyzed = bool(app.eligibility_score is not None or roi)
+    app_documents = list(app.documents.all().order_by("id"))
+
     ctx = {
         "application": app,
+        "lw_customer": cust,
+        "lw_customer_country_name": cust_country_name,
+        "lw_currency_choices": Currency.choices,
+        "lw_chat_app_id": app.pk,
         "lw_loan_type_choices": LoanType.choices,
         "lw_language_choices": Language.choices,
         "lw_portal_backoffice": app.user_id != request.user.id and can_access_all_applications(request.user),
@@ -230,30 +201,10 @@ def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "lw_rag_summary": rag_summary,
         "lw_eligibility_detail": roi.get("eligibility_detail"),
         "lw_detail_lang": lang,
-        "lw_email_verified": request.user.email_verified,
-        "lw_require_email": django_settings.LOANWISE_REQUIRE_EMAIL_VERIFICATION,
         "lw_analysis_rows": analysis_rows_for_template(app),
         "matrix_script_data": matrix_script_data,
+        "lw_payslip_income_display": income_display_for_payslip_estimate(cust, app),
+        "lw_has_been_analyzed": has_been_analyzed,
+        "lw_app_documents": app_documents,
     }
-    if django_settings.DEBUG:
-        docs = list(app.documents.all().order_by("-created_at"))
-        ctx["lw_ai_debug_json"] = json.dumps(
-            {
-                "orchestration_log": app.orchestration_log,
-                "documents": [
-                    {
-                        "id": d.id,
-                        "kind": d.kind,
-                        "original_filename": d.original_filename,
-                        "analysis_result": d.analysis_result,
-                    }
-                    for d in docs
-                ],
-            },
-            indent=2,
-            ensure_ascii=False,
-            default=str,
-        )
-    else:
-        ctx["lw_ai_debug_json"] = None
     return render(request, "loanwise/application_detail.html", ctx)

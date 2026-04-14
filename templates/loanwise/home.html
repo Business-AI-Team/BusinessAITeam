@@ -2,63 +2,68 @@
 {% load i18n %}
 
 {% block content %}
-<section class="grid gap-12 lg:grid-cols-2 lg:items-center">
+
+{# ── Hero ─────────────────────────────────────────────────────────────────── #}
+<section class="mx-auto max-w-2xl text-center">
   <div class="animate-fade-in-up space-y-6">
     <p class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sky-800 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
-      {% trans "API-first · AI-powered" %}
+      🏦 {% trans "Votre demande de prêt simplifiée" %}
     </p>
     <h1 class="text-4xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
-      {% trans "Smart Loan Eligibility Checker" %}
+      {% trans "Obtenez une réponse rapide sur votre éligibilité" %}
     </h1>
     <p class="max-w-xl text-lg text-slate-600 dark:text-slate-300">
-      {% trans "LoanWise guides applicants with a multilingual AI assistant, secure document analysis, and clear ROI insights — built for modern fintech teams." %}
+      {% trans "Déposez votre dossier en ligne, téléchargez vos documents et laissez notre assistant IA analyser votre demande de prêt — en toute sécurité et en quelques minutes." %}
     </p>
-    <div class="flex flex-wrap gap-3">
-      {% if user.is_authenticated %}
-      <a href="{% url 'dashboard' %}" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-500">
-        {% trans "Open dashboard" %}
+    {% if user.is_authenticated %}
+    <div class="flex justify-center">
+      <a href="{% url 'dashboard' %}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-500">
+        📂 {% trans "Accéder à mon espace" %}
       </a>
-      {% else %}
-      <a href="{% url 'register_page' %}" class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-500">
-        {% trans "Get started" %}
-      </a>
-      <a href="/api/docs/swagger/" target="_blank" rel="noopener" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-        {% trans "Explore API" %}
-      </a>
-      {% endif %}
     </div>
-    <dl class="grid grid-cols-2 gap-4 pt-4 sm:grid-cols-3">
-      <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-        <dt class="text-xs text-slate-500">{% trans "Documents" %}</dt>
-        <dd class="text-lg font-semibold">{% trans "SHA-256 + auto-delete" %}</dd>
+    {% endif %}
+
+    {# Stat pills #}
+    <dl class="flex flex-wrap justify-center gap-4 pt-4">
+      <div class="rounded-2xl border border-slate-200 bg-white/60 px-6 py-4 text-center dark:border-slate-800 dark:bg-slate-900/60">
+        <dd class="text-2xl font-bold text-sky-600 dark:text-sky-400">⚡</dd>
+        <dt class="mt-1 text-xs text-slate-500">{% trans "Analyse rapide" %}</dt>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-        <dt class="text-xs text-slate-500">{% trans "AI stack" %}</dt>
-        <dd class="text-lg font-semibold">{% trans "LangGraph · OpenAI" %}</dd>
+      <div class="rounded-2xl border border-slate-200 bg-white/60 px-6 py-4 text-center dark:border-slate-800 dark:bg-slate-900/60">
+        <dd class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">🤖</dd>
+        <dt class="mt-1 text-xs text-slate-500">{% trans "Assistant IA" %}</dt>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-        <dt class="text-xs text-slate-500">{% trans "Languages" %}</dt>
-        <dd class="text-lg font-semibold">{% trans "FR · EN" %}</dd>
+      <div class="rounded-2xl border border-slate-200 bg-white/60 px-6 py-4 text-center dark:border-slate-800 dark:bg-slate-900/60">
+        <dd class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">🔒</dd>
+        <dt class="mt-1 text-xs text-slate-500">{% trans "Sécurisé" %}</dt>
       </div>
     </dl>
   </div>
-  <div class="animate-fade-in-up animate-delay-1 relative">
-    <div class="absolute -inset-4 rounded-3xl bg-gradient-to-tr from-sky-500/20 to-indigo-500/20 blur-2xl"></div>
-    <div class="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white/80 p-6 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-      <div class="mb-4 flex items-center justify-between">
-        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">{% trans "Eligibility preview" %}</span>
-        <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">{% trans "Live" %}</span>
-      </div>
-      <div class="space-y-3">
-        <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          <div class="h-full w-4/5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 transition-all duration-700"></div>
-        </div>
-        <div class="grid gap-2 text-sm text-slate-600 dark:text-slate-300">
-          <div class="flex justify-between"><span>{% trans "Score" %}</span><span class="font-semibold text-sky-600 dark:text-sky-400">82 / 100</span></div>
-          <div class="flex justify-between"><span>{% trans "ROI" %}</span><span class="font-semibold">+14.2%</span></div>
-        </div>
-      </div>
+</section>
+
+{# ── Comment ça marche ─────────────────────────────────────────────────────── #}
+<section class="mt-20">
+  <h2 class="text-center text-2xl font-bold text-slate-900 dark:text-white">{% trans "Comment ça marche ?" %}</h2>
+  <p class="mt-2 text-center text-slate-500 dark:text-slate-400 text-sm">{% trans "3 étapes simples pour connaître votre éligibilité" %}</p>
+
+  <div class="mt-10 grid gap-6 sm:grid-cols-3">
+    <div class="rounded-2xl border border-slate-200 bg-white/70 p-6 text-center dark:border-slate-800 dark:bg-slate-900/70">
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-3xl dark:bg-sky-950/50">📝</div>
+      <h3 class="font-semibold text-slate-900 dark:text-white">1. {% trans "Créez votre dossier" %}</h3>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{% trans "Renseignez vos informations personnelles, le montant souhaité et la durée de remboursement." %}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white/70 p-6 text-center dark:border-slate-800 dark:bg-slate-900/70">
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-3xl dark:bg-indigo-950/50">📎</div>
+      <h3 class="font-semibold text-slate-900 dark:text-white">2. {% trans "Téléchargez vos documents" %}</h3>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{% trans "Pièce d'identité, justificatif de domicile, bulletins de salaire — notre IA les analyse automatiquement." %}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white/70 p-6 text-center dark:border-slate-800 dark:bg-slate-900/70">
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-3xl dark:bg-emerald-950/50">🎯</div>
+      <h3 class="font-semibold text-slate-900 dark:text-white">3. {% trans "Recevez votre résultat" %}</h3>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{% trans "Obtenez un score d'éligibilité clair et posez vos questions à notre assistant IA à tout moment." %}</p>
     </div>
   </div>
 </section>
+
+
 {% endblock %}

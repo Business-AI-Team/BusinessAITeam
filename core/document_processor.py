@@ -62,17 +62,51 @@ def _build_data_url_for_vision(path: Path) -> str | None:
 
 
 def _loan_doc_json_prompt(language: str) -> str:
-    """Prompt JSON unique pour vision / PDF Responses / raster."""
+    """Prompt JSON unique pour vision / PDF Responses / raster — inclut champs pour cohérence formulaire / pièces."""
     if language.startswith("fr"):
         return (
-            "Tu analyses ce document pour un dossier de prêt (CIN, justificatif, etc.). "
-            "Réponds en JSON compact avec les clés: document_type (court), visible_text_summary (résumé du texte visible), "
-            "language_detected, confidence (high/medium/low). Pas de markdown, JSON seul."
+            "Tu analyses ce document pour un dossier de prêt (CIN, fiche de paie, justificatif de domicile, etc.). "
+            "Réponds en JSON STRICT uniquement (pas de markdown, pas de texte hors JSON). "
+            "Clés obligatoires: "
+            "document_type (court, ex. fiche_de_paie, piece_identite, justificatif_domicile), "
+            "visible_text_summary (résumé factuel du texte visible), "
+            "language_detected, confidence (high/medium/low). "
+            "Clé obligatoire extracted_fields (objet) avec les valeurs null si absent ou illisible: "
+            "annual_income_amount (nombre: revenu annuel NET indiqué sur le document si présent), "
+            "monthly_net_amount (nombre: salaire net MENSUEL si indiqué sur une fiche de paie), "
+            "address_on_document (chaîne: adresse complète lue sur le document — domicile, employeur, ou cadre prévu), "
+            "person_full_name (nom complet titulaire/salarié si visible), "
+            "national_id (n° CIN/carte si visible), "
+            "employer_name (nom employeur si bulletin de salaire). "
+            "Pour une fiche de paie, extrais avec précision les montants nets et l’adresse affichée. "
+            "Si seul le net mensuel est visible, laisse annual_income_amount à null et renseigne monthly_net_amount. "
+            "document_currency: une parmi MGA, EUR, MUR selon le symbole sur le document. "
+            "pay_period_year_month: période du bulletin au format YYYY-MM (ex. 2025-02) si visible. "
+            "R\u00e8gle m\u00e9tier importante : SEUL le justificatif de domicile (attestation de r\u00e9sidence, facture, etc.) "
+            "doit avoir une adresse correspondant \u00e0 l'adresse de r\u00e9sidence d\u00e9clar\u00e9e dans le dossier de pr\u00eat. "
+            "La CIN (carte d'identit\u00e9 nationale) et le passeport peuvent l\u00e9gitimement afficher une adresse diff\u00e9rente "
+            "(adresse de naissance, ancienne adresse, adresse parentale) \u2014 ce n'est PAS une anomalie \u00e0 signaler. "
+            "Si l'adresse sur un justificatif de domicile ne correspond pas \u00e0 l'adresse d\u00e9clar\u00e9e, "
+            "signale-le dans visible_text_summary."
         )
     return (
-        "Analyze this document for a loan application (ID card, payslip, etc.). "
-        "Reply with compact JSON only, keys: document_type, visible_text_summary, language_detected, "
-        "confidence (high/medium/low). No markdown."
+        "Analyze this document for a loan application (ID, payslip, proof of address, etc.). "
+        "Reply with STRICT JSON only (no markdown). Required keys: "
+        "document_type (short slug, e.g. payslip, id_card, proof_of_address), "
+        "visible_text_summary (factual summary of visible text), language_detected, confidence (high/medium/low). "
+        "Required key extracted_fields (object), use null if missing/unreadable: "
+        "annual_income_amount (number: NET annual salary printed on the document), "
+        "monthly_net_amount (number: NET monthly salary on a payslip), "
+        "address_on_document (full address string read on the document), "
+        "person_full_name, national_id, employer_name (for payslips). "
+        "On payslips, extract net amounts and any printed address accurately. "
+        "If only monthly net is shown, set annual_income_amount to null and set monthly_net_amount. "
+        "document_currency: one of MGA, EUR, MUR based on symbols on the document. "
+        "pay_period_year_month: payslip period as YYYY-MM if visible. "
+        "Important business rule: ONLY the proof-of-address document (certificate of residence, utility bill, etc.) "
+        "is required to match the applicant's declared home address. "
+        "National ID cards (CIN) and passports may legitimately show a different address - this is NOT an anomaly. "
+        "If the address on a proof-of-address document does not match the declared home, note it in visible_text_summary."
     )
 
 
@@ -81,13 +115,17 @@ def _loan_doc_extracted_text_prompt(language: str) -> str:
     if language.startswith("fr"):
         return (
             "Tu analyses le texte suivant extrait d'un document pour un dossier de prêt. "
-            "Réponds en JSON compact avec les clés: document_type (court), visible_text_summary (résumé), "
-            "language_detected, confidence (high/medium/low). Pas de markdown, JSON seul.\n\n---\n"
+            "Réponds en JSON STRICT uniquement (même schéma que pour une image: document_type, visible_text_summary, "
+            "language_detected, confidence, et extracted_fields avec "
+            "annual_income_amount, monthly_net_amount, address_on_document, person_full_name, national_id, employer_name — null si absent). "
+            "Si l’adresse sur la pièce contredit manifestement une adresse de résidence déclarée dans un dossier de prêt, mentionne-le dans visible_text_summary.\n\n---\n"
         )
     return (
         "Analyze the following extracted document text for a loan application. "
-        "Reply with compact JSON only, keys: document_type, visible_text_summary, "
-        "language_detected, confidence (high/medium/low). No markdown.\n\n---\n"
+        "Strict JSON only, same schema as for images: document_type, visible_text_summary, language_detected, confidence, "
+        "extracted_fields {annual_income_amount, monthly_net_amount, address_on_document, person_full_name, national_id, employer_name}. "
+        "Rule: only the proof-of-address document is checked against the declared home. CIN/passport address may differ — not an issue. "
+        "If the proof-of-address document address conflicts with the declared address, note it in visible_text_summary.\n\n---\n"
     )
 
 
@@ -151,7 +189,7 @@ def _pdf_via_openai_responses(path: Path, language: str, api_key: str) -> dict[s
                 }
             ],
             temperature=0.2,
-            max_output_tokens=2048,
+            max_output_tokens=3072,
         )
     except Exception as e:
         logger.warning("OpenAI Responses PDF failed (%s): %s", path.name, e)
@@ -222,7 +260,7 @@ def _pdf_via_raster_vision(path: Path, language: str, api_key: str) -> dict[str,
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": content}],
-            max_tokens=1200,
+            max_tokens=1600,
             temperature=0.2,
         )
         out = (resp.choices[0].message.content or "").strip()
@@ -261,7 +299,7 @@ def _pdf_via_extracted_text_chat(path: Path, language: str, api_key: str) -> dic
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt + text}],
-            max_tokens=900,
+            max_tokens=1400,
             temperature=0.2,
         )
         out = (resp.choices[0].message.content or "").strip()
@@ -350,7 +388,7 @@ def _analyze_with_openai_vision(path: Path, language: str) -> dict[str, Any]:
                     ],
                 }
             ],
-            max_tokens=800,
+            max_tokens=1600,
             temperature=0.2,
         )
         text = (resp.choices[0].message.content or "").strip()

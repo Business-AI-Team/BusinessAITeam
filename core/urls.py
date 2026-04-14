@@ -10,11 +10,12 @@ router.register(r"applications", api_views.LoanApplicationViewSet, basename="app
 
 urlpatterns = [
     path("auth/register/", api_views.RegisterView.as_view(), name="api-register"),
-    path("auth/verify/", api_views.VerifyEmailView.as_view(), name="api-verify"),
     path("auth/login/", api_views.LoginView.as_view(), name="api-login"),
     path("auth/me/", api_views.MeView.as_view(), name="api-me"),
     path("documents/upload/<int:application_id>/", api_views.DocumentUploadView.as_view(), name="api-document-upload"),
+    path("documents/<int:document_id>/download/", api_views.DocumentDownloadView.as_view(), name="api-document-download"),
     path("requirements/", api_views.DocumentRequirementListView.as_view(), name="api-requirements"),
+    path("assistant/chat/", api_views.AssistantChatView.as_view(), name="api-assistant-chat"),
     path("health/", api_views.HealthView.as_view(), name="api-health"),
     path("seed/", api_views.SeedDemoView.as_view(), name="api-seed"),
     path("", include(router.urls)),

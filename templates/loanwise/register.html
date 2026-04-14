@@ -4,34 +4,72 @@
 {% block title %}{% trans "Sign up" %} — {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-md animate-fade-in-up rounded-2xl border border-slate-200 bg-white/90 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900/90">
+<div class="mx-auto max-w-lg animate-fade-in-up rounded-2xl border border-slate-200 bg-white/90 p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900/90">
   <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{% trans "Create your account" %}</h1>
-  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{% trans "We will send a six-digit verification code to your email." %}</p>
-  <form method="post" class="mt-8 space-y-4">
+  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{% trans "We will send a six-digit verification code to your email. Income is not entered here — it is read from your payslips when you upload them." %}</p>
+  {% if lw_email_taken %}
+  <div class="mt-4 rounded-xl border border-amber-300/80 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+    <p class="font-semibold">{% trans "You already have an account." %}</p>
+    <p class="mt-1">{% trans "An account with this email address already exists." %} <a href="{% url 'login_page' %}" class="font-semibold underline hover:opacity-80">{% trans "Log in instead →" %}</a></p>
+  </div>
+  {% elif lw_register_errors %}
+  <div class="mt-4 rounded-xl border border-rose-300/80 bg-rose-50 p-3 text-sm text-rose-950 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-100">
+    <p class="font-semibold">{% trans "Please fix the following:" %}</p>
+    <ul class="mt-2 list-disc space-y-1 pl-5">
+      {% for field, errs in lw_register_errors.items %}
+        {% for e in errs %}<li>{% if field != 'non_field_errors' %}<span class="font-medium">{{ field }}</span> — {% endif %}{{ e }}</li>{% endfor %}
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  <form method="post" action="{% url 'register_page' %}" class="mt-8 space-y-4" id="lw-register-form">
     {% csrf_token %}
     <div>
-      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Email" %}</label>
-      <input name="email" type="email" required
-             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-    </div>
-    <div>
-      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Username" %}</label>
-      <input name="username" type="text"
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Email" %} *</label>
+      <input name="email" type="email" required autocomplete="email"
              class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
     </div>
     <div class="grid grid-cols-2 gap-3">
       <div>
-        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "First name" %}</label>
-        <input name="first_name" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "First name" %} *</label>
+        <input name="first_name" type="text" required autocomplete="given-name"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
       </div>
       <div>
-        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Last name" %}</label>
-        <input name="last_name" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Last name" %} *</label>
+        <input name="last_name" type="text" required autocomplete="family-name"
+               class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
       </div>
     </div>
     <div>
-      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Password" %}</label>
-      <input name="password" type="password" required minlength="8"
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "ID card number" %} *</label>
+      <input name="id_card" type="text" required maxlength="128"
+             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Phone number" %} *</label>
+      <input name="phone" type="tel" required inputmode="numeric" autocomplete="tel"
+             class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Address" %} *</label>
+      <textarea name="address" rows="2" required autocomplete="street-address"
+                class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"></textarea>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Country" %} *</label>
+      <input type="text" id="lw-country-filter" placeholder="{% trans 'Search country…' %}"
+             class="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950">
+      <select name="country" id="lw-country-select" required size="6"
+              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+        {% for code, name_fr, name_en in lw_countries %}
+        <option value="{{ code }}" data-fr="{{ name_fr }}" data-en="{{ name_en }}">{{ name_fr }} ({{ code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">{% trans "Password" %} *</label>
+      <input name="password" type="password" required minlength="8" autocomplete="new-password"
              class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
     </div>
     <div>
@@ -46,11 +84,23 @@
     </button>
   </form>
   <p class="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
-    <a href="{% url 'verify_email_page' %}" class="font-semibold text-sky-600 hover:underline dark:text-sky-400">{% trans "Enter verification code" %}</a>
-  </p>
-  <p class="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
     {% trans "Already have an account?" %}
     <a href="{% url 'login_page' %}" class="font-semibold text-sky-600 hover:underline dark:text-sky-400">{% trans "Log in" %}</a>
   </p>
 </div>
+<script>
+(function () {
+  var f = document.getElementById('lw-country-filter');
+  var s = document.getElementById('lw-country-select');
+  if (!f || !s) return;
+  f.addEventListener('input', function () {
+    var q = (f.value || '').toLowerCase();
+    for (var i = 0; i < s.options.length; i++) {
+      var o = s.options[i];
+      var t = (o.textContent || '').toLowerCase() + (o.value || '').toLowerCase();
+      o.hidden = q && t.indexOf(q) === -1;
+    }
+  });
+})();
+</script>
 {% endblock %}

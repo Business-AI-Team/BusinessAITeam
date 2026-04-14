@@ -4,13 +4,15 @@ DRF serializers for LoanWise API (API-first contract).
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from core.models import ApplicationDocument, DocumentRequirement, LoanApplication, PortalRole
+from core.models import ApplicationDocument, Currency, DocumentRequirement, LoanApplication, PortalRole
 
 User = get_user_model()
 
@@ -21,35 +23,85 @@ class UserSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "email",
-            "username",
             "first_name",
             "last_name",
-            "email_verified",
             "preferred_language",
             "theme_preference",
             "portal_role",
         )
-        read_only_fields = ("id", "email_verified", "portal_role")
+        read_only_fields = ("id", "portal_role")
 
 
-class RegisterSerializer(serializers.ModelSerializer):
+class RegisterSerializer(serializers.Serializer):
+    """Inscription : identité et coordonnées ; revenu issu des bulletins après analyse (pas de saisie ici)."""
+
+    email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
     preferred_language = serializers.ChoiceField(choices=["fr", "en"], default="fr")
+    id_card = serializers.CharField(max_length=128)
+    phone = serializers.CharField(max_length=32)
+    address = serializers.CharField()
+    country = serializers.CharField(min_length=2, max_length=2)
 
-    class Meta:
-        model = User
-        fields = ("email", "username", "password", "first_name", "last_name", "preferred_language")
+    def validate_email(self, value: str) -> str:
+        v = (value or "").strip().lower()
+        if User.objects.filter(email__iexact=v).exists():
+            raise serializers.ValidationError(
+                _(
+                    "An account already exists with this email address. Please log in instead."
+                )
+            )
+        return v
 
+    def validate_phone(self, value: str) -> str:
+        s = (value or "").strip()
+        if not re.match(r"^\+?[\d\s\-\.]{8,24}$", s):
+            raise serializers.ValidationError(_("Enter a valid phone number."))
+        return s
+
+    def validate_country(self, value: str) -> str:
+        return (value or "").strip().upper()[:2]
+
+    @transaction.atomic
     def create(self, validated_data):
+        """
+        Un seul enregistrement User + profil Customer : le signal ``post_save`` crée déjà
+        un Customer minimal ; on complète avec ``update_or_create`` (pas un second ``create``).
+        """
+        from core.models import Customer
+
         password = validated_data.pop("password")
-        email = validated_data["email"].lower()
+        id_card = validated_data.pop("id_card")
+        phone = validated_data.pop("phone")
+        address = validated_data.pop("address")
+        country = validated_data.pop("country")
+        email = validated_data["email"].lower().strip()
         validated_data["email"] = email
-        validated_data["username"] = validated_data.get("username") or email.split("@")[0]
-        user = User(**validated_data)
+        user = User(
+            email=email,
+            first_name=validated_data["first_name"],
+            last_name=validated_data["last_name"],
+            preferred_language=validated_data.get("preferred_language") or "fr",
+        )
         user.set_password(password)
-        user.email_verified = False
         user.portal_role = PortalRole.CUSTOMER
         user.save()
+        Customer.objects.update_or_create(
+            user=user,
+            defaults={
+                "id_card": id_card.strip(),
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email": email,
+                "phone": phone,
+                "address": address.strip(),
+                "country": country,
+                "annual_income": Decimal("0"),
+                "income_currency": Currency.EUR,
+            },
+        )
         return user
 
 
@@ -91,6 +143,7 @@ class LoanApplicationSerializer(serializers.ModelSerializer):
             "status",
             "language",
             "amount_requested",
+            "amount_currency",
             "term_months",
             "annual_income",
             "purpose",
@@ -138,7 +191,7 @@ class LoanApplicationSerializer(serializers.ModelSerializer):
 
 
 class LoanApplicationWriteSerializer(serializers.ModelSerializer):
-    """Create/update loan application from API (formulaire web, pas de chat)."""
+    """Création / mise à jour : montant, devise du montant, durée (revenu = profil client)."""
 
     class Meta:
         model = LoanApplication
@@ -146,8 +199,8 @@ class LoanApplicationWriteSerializer(serializers.ModelSerializer):
             "loan_type",
             "language",
             "amount_requested",
+            "amount_currency",
             "term_months",
-            "annual_income",
             "purpose",
             "due_date",
             "current_step",
@@ -156,16 +209,14 @@ class LoanApplicationWriteSerializer(serializers.ModelSerializer):
             "language": {"required": False},
             "due_date": {"required": False},
             "current_step": {"required": False},
+            "loan_type": {"required": False},
+            "purpose": {"required": False},
+            "amount_currency": {"required": False},
         }
 
     def validate_amount_requested(self, value: Decimal) -> Decimal:
-        if value < 0:
-            raise serializers.ValidationError(_("Amount must be positive or zero."))
-        return value
-
-    def validate_annual_income(self, value: Decimal) -> Decimal:
-        if value < 0:
-            raise serializers.ValidationError(_("Annual income cannot be negative."))
+        if value <= 0:
+            raise serializers.ValidationError(_("Amount must be strictly positive."))
         return value
 
 

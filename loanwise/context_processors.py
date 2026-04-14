@@ -12,4 +12,5 @@ def loanwise_globals(request):
         "LOANWISE_COMMERCIAL_NAME": "Smart Loan Eligibility Checker",
         "FRONTEND_BASE_URL": getattr(settings, "FRONTEND_BASE_URL", ""),
         "LANG_PREFIX": lang_prefix,
+        "lw_chat_app_id": None,
     }

@@ -40,6 +40,14 @@ class PortalRole(models.TextChoices):
     BACKOFFICE = "backoffice", _("Backoffice")
 
 
+class Currency(models.TextChoices):
+    """Devises prises en charge (montants et conversions)."""
+
+    MGA = "MGA", _("MGA (Ariary)")
+    EUR = "EUR", _("EUR (Euro)")
+    MUR = "MUR", _("MUR (Mauritius rupee)")
+
+
 class Customer(models.Model):
     """
     Applicant profile (ERD: Customer). Linked 1:1 to the login account (`User`) when Type = customer.
@@ -64,7 +72,24 @@ class Customer(models.Model):
         help_text=_("Profile copy; canonical login email is on Account (User)."),
     )
     phone = models.CharField(max_length=32, blank=True)
+    country = models.CharField(
+        max_length=2,
+        blank=True,
+        default="",
+        help_text=_("ISO 3166-1 alpha-2 country code."),
+    )
     address = models.TextField(blank=True)
+    annual_income = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text=_("Optional manual annual income; otherwise estimated from payslip analysis (same currency as income_currency)."),
+    )
+    income_currency = models.CharField(
+        max_length=3,
+        choices=Currency.choices,
+        default=Currency.EUR,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -109,10 +134,11 @@ class User(AbstractUser):
     """
     Login account (ERD: Account: email, password, Type via `portal_role`).
     Extended with verification, i18n, theming; 1:1 Customer or BackOffice profile when applicable.
+    Identité métier : email (connexion) et CIN sur le profil ``Customer.id_card`` — pas de nom d’utilisateur séparé.
     """
 
+    username = None
     email = models.EmailField(_("email address"), unique=True)
-    email_verified = models.BooleanField(default=False)
     preferred_language = models.CharField(
         max_length=5,
         choices=Language.choices,
@@ -132,7 +158,7 @@ class User(AbstractUser):
     )
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username"]
+    REQUIRED_FIELDS: list[str] = []
 
     class Meta:
         verbose_name = _("user")
@@ -141,52 +167,11 @@ class User(AbstractUser):
     def __str__(self) -> str:
         return self.email
 
+    def save(self, *args, **kwargs) -> None:
+        if self.email:
+            self.email = self.email.strip().lower()
+        super().save(*args, **kwargs)
 
-class EmailVerificationToken(models.Model):
-    """
-    Single-use token for email verification after signup.
-    """
-
-    CODE_LENGTH = 6
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="email_verification_tokens",
-    )
-    token = models.CharField(max_length=64, unique=True, db_index=True)
-    code = models.CharField(
-        max_length=12,
-        blank=True,
-        default="",
-        db_index=True,
-        help_text="Numeric code sent by email (empty for legacy rows).",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    consumed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    @classmethod
-    def _new_unique_code(cls) -> str:
-        for _ in range(100):
-            c = "".join(secrets.choice("0123456789") for _ in range(cls.CODE_LENGTH))
-            if not cls.objects.filter(consumed_at__isnull=True, code=c).exists():
-                return c
-        raise RuntimeError("Could not allocate a unique verification code")
-
-    @classmethod
-    def create_for_user(cls, user: User) -> EmailVerificationToken:
-        return cls.objects.create(
-            user=user,
-            token=secrets.token_urlsafe(48),
-            code=cls._new_unique_code(),
-        )
-
-    def consume(self) -> None:
-        self.consumed_at = timezone.now()
-        self.save(update_fields=["consumed_at"])
 
 
 class LoanType(models.TextChoices):
@@ -244,6 +229,12 @@ class LoanApplication(models.Model):
         max_digits=14,
         decimal_places=2,
         default=Decimal("0"),
+    )
+    amount_currency = models.CharField(
+        max_length=3,
+        choices=Currency.choices,
+        default=Currency.EUR,
+        help_text=_("Currency of the requested loan amount."),
     )
     term_months = models.PositiveIntegerField(default=12)
     annual_income = models.DecimalField(
@@ -304,13 +295,35 @@ class LoanApplication(models.Model):
                         },
                     )
                     self.customer_id = c.pk
+        if self.customer_id:
+            try:
+                cust = self.customer
+            except Customer.DoesNotExist:
+                cust = None
+            if cust is not None and cust.annual_income is not None and cust.annual_income > 0:
+                self.annual_income = cust.annual_income
         super().save(*args, **kwargs)
+
+    @property
+    def effective_annual_income(self) -> Decimal:
+        """Revenu annuel : profil ou dossier si renseigné, sinon meilleure estimation issue des bulletins analysés."""
+        c = getattr(self, "customer", None)
+        if c is not None and c.annual_income is not None and c.annual_income > 0:
+            return c.annual_income
+        if self.annual_income is not None and self.annual_income > 0:
+            return self.annual_income
+        from core.document_consistency import best_annual_income_from_payslips
+
+        est = best_annual_income_from_payslips(self)
+        return est if est and est > 0 else Decimal("0")
 
     def has_complete_financial_profile(self) -> bool:
         """Declared income and loan amount are set (> 0) so the deterministic score is meaningful."""
-        if self.annual_income is None or self.amount_requested is None:
+        if self.amount_requested is None:
             return False
-        if self.annual_income <= 0 or self.amount_requested <= 0:
+        if self.amount_requested <= 0:
+            return False
+        if self.effective_annual_income <= 0:
             return False
         if self.term_months is None or self.term_months < 1:
             return False
@@ -339,6 +352,14 @@ class DocumentRequirement(models.Model):
     min_files = models.PositiveIntegerField(
         default=1,
         help_text=_("Minimum uploads linked to this requirement (e.g. 3 payslips)."),
+    )
+    payslip_distinct_months_window = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text=_(
+            "If set (e.g. 3), payslips must cover that many distinct calendar months within the recent window "
+            "(see policy / RAG). Null = do not validate dates."
+        ),
     )
     sort_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)

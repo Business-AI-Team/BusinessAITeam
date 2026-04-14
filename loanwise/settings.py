@@ -24,6 +24,20 @@ ALLOWED_HOSTS = [
     if h.strip()
 ]
 
+# CSRF / Referer : en dev, accepter localhost et 127.0.0.1 (évite 403 si on mélange les deux dans le navigateur).
+# En prod : définir DJANGO_CSRF_TRUSTED_ORIGINS=https://votredomaine.com,https://www.votredomaine.com
+_csrf_env = [x.strip() for x in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if x.strip()]
+if _csrf_env:
+    CSRF_TRUSTED_ORIGINS = _csrf_env
+elif DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://192.168.1.218:8000",
+    ]
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -33,7 +47,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework.authtoken",
-    "drf_spectacular",
     "corsheaders",
     "core",
 ]
@@ -130,16 +143,6 @@ def _env_bool(name: str, default: bool) -> bool:
     return default
 
 
-# Production: exiger une e-mail vérifiée pour lancer le pipeline. En DEBUG, False par défaut (hackathon / local).
-LOANWISE_REQUIRE_EMAIL_VERIFICATION = _env_bool(
-    "LOANWISE_REQUIRE_EMAIL_VERIFICATION",
-    default=not DEBUG,
-)
-# En DEBUG, marquer l’e-mail comme vérifié à l’inscription (aucun SMTP requis pour tester le flux).
-LOANWISE_AUTO_VERIFY_EMAIL_IN_DEBUG = _env_bool(
-    "LOANWISE_AUTO_VERIFY_EMAIL_IN_DEBUG",
-    default=DEBUG,
-)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -150,7 +153,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+
     "EXCEPTION_HANDLER": "core.exception_handler.loanwise_exception_handler",
 }
 
@@ -170,6 +173,9 @@ CORS_ALLOWED_ORIGINS = [
 
 # --- LoanWise business / AI ---
 LOANWISE_CURRENCY = os.environ.get("LOANWISE_CURRENCY", "EUR")
+# Taux indicatifs pour MGA / MUR vs EUR (1 EUR = N unités locales). Ajustez selon votre source.
+LOANWISE_FX_MGA_PER_EUR = float(os.environ.get("LOANWISE_FX_MGA_PER_EUR", "4700"))
+LOANWISE_FX_MUR_PER_EUR = float(os.environ.get("LOANWISE_FX_MUR_PER_EUR", "49"))
 LOANWISE_INTEREST_RATE_ANNUAL = float(os.environ.get("LOANWISE_INTEREST_RATE_ANNUAL", "0.05"))
 LOANWISE_APPROVAL_THRESHOLD = float(os.environ.get("LOANWISE_APPROVAL_THRESHOLD", "55"))
 LOANWISE_DELETE_FILES_AFTER_ANALYSIS = os.environ.get("LOANWISE_DELETE_FILES_AFTER_ANALYSIS", "true").lower() in (
@@ -197,6 +203,10 @@ LOANWISE_RAG_OPENAI_EMBEDDING_MODEL = os.environ.get(
 ).strip()
 # Texte politique concaténé envoyé au LLM (extraction + décision LangChain) — évite les coupures trop agressives.
 LOANWISE_RAG_LLM_MAX_CHARS = int(os.environ.get("LOANWISE_RAG_LLM_MAX_CHARS", "120000"))
+# Cohérence déclaré vs pièces (fiche de paie, adresse) : tolérance revenu (%), recouvrement adresse minimal, plafond pénalité score.
+LOANWISE_DOC_INCOME_TOLERANCE_PERCENT = int(os.environ.get("LOANWISE_DOC_INCOME_TOLERANCE_PERCENT", "15"))
+LOANWISE_ADDRESS_OVERLAP_MIN = float(os.environ.get("LOANWISE_ADDRESS_OVERLAP_MIN", "0.22"))
+LOANWISE_CONSISTENCY_MAX_SCORE_PENALTY = int(os.environ.get("LOANWISE_CONSISTENCY_MAX_SCORE_PENALTY", "35"))
 
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"

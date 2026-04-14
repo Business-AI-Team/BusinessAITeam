@@ -13,26 +13,22 @@ from typing import Any
 
 from django.conf import settings
 
+from core.currency_fx import convert_amount, format_money
+from core.document_consistency import check_application_document_consistency
 from core.llm_eligibility_analysis import invoke_full_context_eligibility_llm
 from core.models import LoanApplication
 from core.rag_eligibility import get_all_active_knowledge_text, get_eligibility_guidance_from_rag
-
-
-def _money_str(n: Decimal | float | int, currency: str) -> str:
-    try:
-        d = n if isinstance(n, Decimal) else Decimal(str(n))
-    except Exception:
-        d = Decimal("0")
-    s = f"{d:,.0f}".replace(",", " ")
-    return f"{s} {currency}".strip()
 
 
 def _payment_and_dti(application: LoanApplication) -> tuple[Decimal, Decimal, Decimal] | None:
     """Estimated monthly payment, monthly income, DTI ratio — ou None si données insuffisantes."""
     if not application.has_complete_financial_profile():
         return None
-    income = application.annual_income
-    amount = application.amount_requested
+    income = application.effective_annual_income
+    cust = getattr(application, "customer", None)
+    inc_ccy = (getattr(cust, "income_currency", None) or "EUR") if cust else "EUR"
+    amt_ccy = getattr(application, "amount_currency", None) or "EUR"
+    amount = convert_amount(application.amount_requested, amt_ccy, inc_ccy)
     months = max(1, application.term_months or 12)
     rate = Decimal(str(getattr(settings, "LOANWISE_INTEREST_RATE_ANNUAL", 0.05)))
     monthly_rate = rate / Decimal("12")
@@ -107,19 +103,33 @@ def _rag_snippets_from_full_policy(full_policy: str, n: int = 4, max_len: int = 
     return out[:n]
 
 
-def build_eligibility_detail(application: LoanApplication, language: str | None = None) -> dict[str, Any]:
+def build_eligibility_detail(
+    application: LoanApplication,
+    language: str | None = None,
+    *,
+    consistency: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Full structured explanation: financial reasoning + policy (RAG) alignment.
 
     Stored under roi_summary['eligibility_detail'] after scoring.
+    ``consistency`` : résultat de :func:`check_application_document_consistency` (évite un double calcul si déjà fait).
     """
     lang = (language or application.language or "fr").lower()
+    if consistency is None:
+        consistency = check_application_document_consistency(application)
     currency = getattr(settings, "LOANWISE_CURRENCY", "EUR")
     threshold = float(getattr(settings, "LOANWISE_APPROVAL_THRESHOLD", 55))
     score_f = float(application.eligibility_score) if application.eligibility_score is not None else 0.0
-    validated = score_f >= threshold
+    issues_list = consistency.get("issues") or []
+    has_address_mismatch = any(i.get("code") == "address_mismatch" for i in issues_list)
+    validated = (score_f >= threshold) and not has_address_mismatch
 
-    income = application.annual_income if application.annual_income is not None else Decimal("0")
+    cust = getattr(application, "customer", None)
+    income_ccy = getattr(cust, "income_currency", None) or currency if cust else currency
+    amt_ccy = getattr(application, "amount_currency", None) or currency
+
+    income = application.effective_annual_income
     amount = application.amount_requested if application.amount_requested is not None else Decimal("0")
     months = max(1, application.term_months or 12)
     pmt_dti = _payment_and_dti(application)
@@ -143,42 +153,62 @@ def build_eligibility_detail(application: LoanApplication, language: str | None 
 
     if not profile_ok:
         financial_bullets_fr = [
-            f"Revenu annuel déclaré : {_money_str(income, currency)} ; montant demandé : {_money_str(amount, currency)} ; durée : {months} mois.",
-            "Le score reste à 0 si le revenu ou le montant n’est pas renseigné ou est à zéro (valeurs par défaut du dossier).",
-            "Complétez le montant et le revenu dans le formulaire du dossier, puis relancez le pipeline. "
+            f"Revenu annuel utilisé pour le dossier : {format_money(income, income_ccy)} ; montant demandé : {format_money(amount, amt_ccy)} ; durée : {months} mois.",
+            "Le score reste à 0 si le montant est absent ou si aucun revenu n’est disponible (profil ou estimation depuis les bulletins après analyse).",
+            "Indiquez le montant du prêt, téléversez les bulletins de salaire pour l’estimation du revenu, puis relancez le pipeline. "
             "Le score est une formule déterministe (capacité de remboursement), indépendante des appels OpenAI (analyse documents / RAG).",
             f"Score calculé : {score_f:.2f} / 100 (seuil interne : {threshold:.0f}).",
         ]
         financial_bullets_en = [
-            f"Declared annual income: {_money_str(income, currency)}; requested amount: {_money_str(amount, currency)}; term: {months} months.",
-            "The score stays at 0 when income or amount is missing or zero (application defaults).",
-            "Fill in amount and income in the application form, then re-run the pipeline. The score is a deterministic debt-to-income formula, separate from OpenAI (document analysis / RAG).",
+            f"Annual income used for the application: {format_money(income, income_ccy)}; requested amount: {format_money(amount, amt_ccy)}; term: {months} months.",
+            "The score stays at 0 when the loan amount is missing or no income is available (profile or payslip-based estimate after analysis).",
+            "Set the loan amount, upload payslips so income can be estimated, then re-run the pipeline. The score is a deterministic debt-to-income formula, separate from OpenAI (document analysis / RAG).",
             f"Computed score: {score_f:.2f} / 100 (internal threshold: {threshold:.0f}).",
         ]
         summary_fr = (
             f"Données financières insuffisantes (score {score_f:.2f}). "
-            "Indiquez un revenu annuel et un montant de prêt strictement positifs pour un score interprétable."
+            "Indiquez un montant de prêt strictement positif et fournissez des bulletins pour estimer le revenu, ou un revenu profil si renseigné."
         )
         summary_en = (
             f"Insufficient financial data (score {score_f:.2f}). "
-            "Enter strictly positive annual income and loan amount for a meaningful score."
+            "Enter a strictly positive loan amount and upload payslips for income estimation (or set profile income if used)."
         )
     else:
         payment, monthly_income, dti = pmt_dti  # type: ignore[assignment]
         dti_pct = float(dti * Decimal("100"))
         financial_bullets_fr = [
-            f"Revenu annuel déclaré : {_money_str(income, currency)}.",
-            f"Mensualité estimée (taux annuel {rate_annual}, {months} mois) : {_money_str(payment, currency)}.",
-            f"Revenu mensuel déclaré : {_money_str(monthly_income, currency)} — charge estimée / revenu mensuel ≈ {dti_pct:.1f} %.",
+            f"Revenu annuel utilisé : {format_money(income, income_ccy)} (profil ou estimation bulletins).",
+            f"Mensualité estimée en {income_ccy} (taux annuel {rate_annual}, {months} mois) : {format_money(payment, income_ccy)}.",
+            f"Revenu mensuel ({income_ccy}) : {format_money(monthly_income, income_ccy)} — charge / revenu ≈ {dti_pct:.1f} %.",
             f"Score d'éligibilité calculé : {score_f:.2f} / 100 (seuil interne : {threshold:.0f}).",
         ]
         financial_bullets_en = [
-            f"Declared annual income: {_money_str(income, currency)}.",
-            f"Estimated monthly payment (annual rate {rate_annual}, {months} months): {_money_str(payment, currency)}.",
-            f"Declared monthly income: {_money_str(monthly_income, currency)} — estimated payment-to-income ≈ {dti_pct:.1f}%.",
+            f"Annual income used: {format_money(income, income_ccy)} (profile or payslip estimate).",
+            f"Estimated monthly payment in {income_ccy} (annual rate {rate_annual}, {months} months): {format_money(payment, income_ccy)}.",
+            f"Monthly income ({income_ccy}): {format_money(monthly_income, income_ccy)} — payment-to-income ≈ {dti_pct:.1f}%.",
             f"Computed eligibility score: {score_f:.2f} / 100 (internal threshold: {threshold:.0f}).",
         ]
-        if validated:
+        if has_address_mismatch:
+            financial_bullets_fr.append(
+                "Incohérence d’adresse : l’adresse déclarée sur le profil ne correspond pas de façon suffisante à celle lisible sur les pièces "
+                "(justificatif de domicile, bulletin, etc.). Même si les indicateurs financiers sont favorables, le dossier n’est pas recevable tant que l’adresse n’est pas alignée."
+            )
+            financial_bullets_en.append(
+                "Address mismatch: the address on your profile does not match closely enough what is readable on your documents "
+                "(proof of address, payslip, etc.). Even if financial ratios look good, the application cannot be accepted until addresses are consistent."
+            )
+        if has_address_mismatch:
+            summary_fr = (
+                f"Décision indicative : non éligible — incohérence entre l’adresse du profil et les pièces "
+                f"(score numérique {score_f:.2f}, seuil {threshold:.0f}). "
+                "Mettez à jour votre adresse dans le profil ou fournissez un justificatif de domicile et une pièce d’identité cohérents avec cette adresse."
+            )
+            summary_en = (
+                f"Indicative decision: not eligible — profile address does not match uploaded documents "
+                f"(numeric score {score_f:.2f}, threshold {threshold:.0f}). "
+                "Update your profile address or upload proof of address and ID documents that match the declared address."
+            )
+        elif validated:
             summary_fr = (
                 f"Décision indicative : éligible (score {score_f:.2f} ≥ seuil {threshold:.0f}). "
                 f"Les critères financiers (revenu, mensualité, durée) sont cohérents avec le score."
@@ -190,11 +220,11 @@ def build_eligibility_detail(application: LoanApplication, language: str | None 
         else:
             summary_fr = (
                 f"Décision indicative : non éligible (score {score_f:.2f} < seuil {threshold:.0f}). "
-                f"La mensualité estimée pèse fortement sur le revenu mensuel déclaré (ratio élevé), sauf autres éléments positifs."
+                f"La mensualité estimée pèse fortement sur le revenu mensuel utilisé (ratio élevé), sauf autres éléments positifs."
             )
             summary_en = (
                 f"Indicative decision: not eligible (score {score_f:.2f} < threshold {threshold:.0f}). "
-                f"The estimated monthly burden is high relative to declared monthly income unless other factors apply."
+                f"The estimated monthly burden is high relative to monthly income used for the application unless other factors apply."
             )
 
     policy_bullets_fr: list[str] = []
@@ -206,28 +236,28 @@ def build_eligibility_detail(application: LoanApplication, language: str | None 
             mn, mx = float(min_amt), float(max_amt)
             if a < mn:
                 policy_bullets_fr.append(
-                    f"Les documents de politique indiquent un montant minimum d’emprunt d’environ {_money_str(Decimal(str(mn)), policy_cur)} — "
-                    f"votre demande ({_money_str(amount, currency)}) est en dessous."
+                    f"Les documents de politique indiquent un montant minimum d’emprunt d’environ {format_money(Decimal(str(mn)), policy_cur)} — "
+                    f"votre demande ({format_money(application.amount_requested, amt_ccy)}) est en dessous."
                 )
                 policy_bullets_en.append(
-                    f"Policy documents suggest a minimum loan amount around {_money_str(Decimal(str(mn)), policy_cur)} — "
-                    f"your request ({_money_str(amount, currency)}) is below that range."
+                    f"Policy documents suggest a minimum loan amount around {format_money(Decimal(str(mn)), policy_cur)} — "
+                    f"your request ({format_money(application.amount_requested, amt_ccy)}) is below that range."
                 )
             elif a > mx:
                 policy_bullets_fr.append(
-                    f"Les documents de politique indiquent un plafond d’environ {_money_str(Decimal(str(mx)), policy_cur)} — "
-                    f"votre demande ({_money_str(amount, currency)}) le dépasse."
+                    f"Les documents de politique indiquent un plafond d’environ {format_money(Decimal(str(mx)), policy_cur)} — "
+                    f"votre demande ({format_money(application.amount_requested, amt_ccy)}) le dépasse."
                 )
                 policy_bullets_en.append(
-                    f"Policy documents suggest a maximum around {_money_str(Decimal(str(mx)), policy_cur)} — "
-                    f"your request ({_money_str(amount, currency)}) exceeds it."
+                    f"Policy documents suggest a maximum around {format_money(Decimal(str(mx)), policy_cur)} — "
+                    f"your request ({format_money(application.amount_requested, amt_ccy)}) exceeds it."
                 )
             else:
                 policy_bullets_fr.append(
-                    f"Le montant demandé se situe dans la fourchette indicative issue des documents ({_money_str(Decimal(str(mn)), policy_cur)} – {_money_str(Decimal(str(mx)), policy_cur)})."
+                    f"Le montant demandé se situe dans la fourchette indicative issue des documents ({format_money(Decimal(str(mn)), policy_cur)} – {format_money(Decimal(str(mx)), policy_cur)})."
                 )
                 policy_bullets_en.append(
-                    f"The requested amount falls within the indicative range from policy documents ({_money_str(Decimal(str(mn)), policy_cur)} – {_money_str(Decimal(str(mx)), policy_cur)})."
+                    f"The requested amount falls within the indicative range from policy documents ({format_money(Decimal(str(mn)), policy_cur)} – {format_money(Decimal(str(mx)), policy_cur)})."
                 )
         except (TypeError, ValueError):
             pass
@@ -237,26 +267,71 @@ def build_eligibility_detail(application: LoanApplication, language: str | None 
             ai = int(Decimal(str(income)).quantize(Decimal("1")))
             if ai < income_floor:
                 policy_bullets_fr.append(
-                    f"D’après les extraits de politique indexés, un revenu annuel d’au moins environ {_money_str(Decimal(income_floor), policy_cur)} "
-                    f"est mentionné — le revenu déclaré ({_money_str(income, currency)}) est inférieur à ce repère."
+                    f"D’après les extraits de politique indexés, un revenu annuel d’au moins environ {format_money(Decimal(income_floor), policy_cur)} "
+                    f"est mentionné — le revenu utilisé pour le dossier ({format_money(income, income_ccy)}) est inférieur à ce repère."
                 )
                 policy_bullets_en.append(
-                    f"Indexed policy excerpts mention an annual income of at least about {_money_str(Decimal(income_floor), policy_cur)} — "
-                    f"declared income ({_money_str(income, currency)}) is below that benchmark."
+                    f"Indexed policy excerpts mention an annual income of at least about {format_money(Decimal(income_floor), policy_cur)} — "
+                    f"income used for the application ({format_money(income, income_ccy)}) is below that benchmark."
                 )
             else:
                 policy_bullets_fr.append(
-                    f"Par rapport aux extraits de politique (repère de revenu annuel d’environ {_money_str(Decimal(income_floor), policy_cur)}), "
-                    f"le revenu déclaré ({_money_str(income, currency)}) atteint ou dépasse ce niveau."
+                    f"Par rapport aux extraits de politique (repère de revenu annuel d’environ {format_money(Decimal(income_floor), policy_cur)}), "
+                    f"le revenu utilisé pour le dossier ({format_money(income, income_ccy)}) atteint ou dépasse ce niveau."
                 )
                 policy_bullets_en.append(
-                    f"Compared to policy excerpts (annual income benchmark around {_money_str(Decimal(income_floor), policy_cur)}), "
-                    f"declared income ({_money_str(income, currency)}) meets or exceeds that level."
+                    f"Compared to policy excerpts (annual income benchmark around {format_money(Decimal(income_floor), policy_cur)}), "
+                    f"income used for the application ({format_money(income, income_ccy)}) meets or exceeds that level."
                 )
         except Exception:
             pass
 
     rag_snippets = _rag_snippets_from_full_policy(combined_policy, n=4)
+
+    user_advice_fr = ""
+    user_advice_en = ""
+    if has_address_mismatch:
+        src = (consistency or {}).get("address_mismatch_sources") or {}
+        poa = bool(src.get("proof_of_address"))
+        oth = bool(src.get("other_document"))
+        # Regle : CIN / passeport non verifies contre l'adresse du profil.
+        # Seul le justificatif de domicile doit correspondre a l'adresse declaree.
+        if poa and not oth:
+            user_advice_fr = (
+                "Mettez a jour l'adresse de votre profil pour qu'elle corresponde a celle de votre "
+                "justificatif de domicile (facture, attestation d'hebergement, quittance de loyer...), "
+                "ou fournissez un justificatif recent a votre nom qui reprend l'adresse declaree. "
+                "L'adresse sur votre CIN ou passeport n'est pas concernee par cette verification."
+            )
+            user_advice_en = (
+                "Update your profile address to match your proof of address (utility bill, hosting "
+                "certificate, rent receipt...), or upload a recent document in your name showing the "
+                "address you declared. The address on your CIN or passport is not subject to this check."
+            )
+        elif oth and not poa:
+            user_advice_fr = (
+                "L'ecart provient probablement d'une adresse professionnelle (employeur) visible sur "
+                "un bulletin de paie. Telechargez un justificatif de domicile recent a votre nom dont "
+                "l'adresse correspond a celle de votre profil. "
+                "L'adresse sur votre CIN ou passeport n'est pas verifiee ici."
+            )
+            user_advice_en = (
+                "The mismatch likely comes from an employer address visible on a payslip. "
+                "Upload a recent proof of address in your name matching the address declared in your profile. "
+                "The address on your CIN or passport is not checked here."
+            )
+        else:
+            user_advice_fr = (
+                "L'adresse de votre profil ne correspond pas a celle lisible sur le justificatif de "
+                "domicile ou une autre piece. Corrigez le profil ou fournissez un justificatif de "
+                "domicile a votre nom avec l'adresse correcte. "
+                "Rappel : l'adresse sur la CIN ou le passeport n'est pas prise en compte ici."
+            )
+            user_advice_en = (
+                "Your profile address does not match the address on your proof of address or another "
+                "document. Correct your profile or provide a proof of address in your name with the "
+                "right address. Reminder: the address on a CIN or passport is not used in this check."
+            )
 
     detail: dict[str, Any] = {
         "decision": "validated" if validated else "rejected",
@@ -277,6 +352,11 @@ def build_eligibility_detail(application: LoanApplication, language: str | None 
         "rag_snippets": rag_snippets,
         "policy_full_text_chars": len(combined_policy),
         "policy_truncated": bool(policy_bundle.get("truncated")),
+        "document_consistency": consistency,
+        "address_blocker": has_address_mismatch,
+        "user_advice_fr": user_advice_fr,
+        "user_advice_en": user_advice_en,
+        "identity_address_block": has_address_mismatch,
     }
 
     try:
