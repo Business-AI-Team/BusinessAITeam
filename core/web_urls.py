@@ -11,6 +11,7 @@ urlpatterns = [
     path("verify-email/", web_views.verify_email_page, name="verify_email_page"),
     path("login/", web_views.login_page, name="login_page"),
     path("logout/", web_views.logout_view, name="logout"),
+    path("profile/edit/", web_views.edit_profile, name="edit_profile"),
 
     # Generic redirect (backward compat)
     path("dashboard/", web_views.dashboard, name="dashboard"),

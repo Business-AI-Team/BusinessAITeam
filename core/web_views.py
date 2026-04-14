@@ -177,6 +177,55 @@ def logout_view(request: HttpRequest) -> HttpResponse:
     return redirect("home")
 
 
+@login_required
+@require_http_methods(["GET", "POST"])
+def edit_profile(request: HttpRequest) -> HttpResponse:
+    user = request.user
+    is_customer = getattr(user, "account_type", None) == AccountType.CUSTOMER
+
+    if request.method == "POST":
+        new_email = request.POST.get("email", "").strip()
+        new_phone = request.POST.get("phone", "").strip()
+        new_address = request.POST.get("address", "").strip()
+
+        errors = []
+
+        if not new_email:
+            errors.append(_("Email address is required."))
+        elif new_email != user.email and Account.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+            errors.append(_("This email address is already used by another account."))
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            user.email = new_email
+            user.username = new_email
+            user.save(update_fields=["email", "username"])
+
+            if is_customer and user.customer:
+                profile = user.customer
+                profile.email = new_email
+                profile.phone = new_phone
+                profile.address = new_address
+                profile.save(update_fields=["email", "phone", "address"])
+            elif not is_customer and user.back_office:
+                profile = user.back_office
+                profile.email = new_email
+                profile.save(update_fields=["email"])
+
+            messages.success(request, _("Your profile has been updated."))
+            return redirect("home")
+
+    context = {
+        "is_customer": is_customer,
+        "profile_email": user.email,
+        "profile_phone": user.customer.phone if is_customer and user.customer else "",
+        "profile_address": user.customer.address if is_customer and user.customer else "",
+    }
+    return render(request, "loanwise/edit_profile.html", context)
+
+
 # Kept for backward compat
 def dashboard(request):
     if not request.user.is_authenticated:
