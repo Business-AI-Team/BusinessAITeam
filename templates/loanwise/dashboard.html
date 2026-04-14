@@ -10,12 +10,14 @@
       <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{% trans "Your applications" %}</h1>
       <p class="mt-1 text-slate-600 dark:text-slate-400">{% trans "Track eligibility, documents, and pipeline progress." %}</p>
     </div>
+    {% if user.portal_role != 'backoffice' and not user.is_staff %}
     <button type="button" @click="createApp()"
             class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-sky-500 disabled:opacity-50"
             :disabled="loading">
       <span x-show="!loading">{% trans "New application" %}</span>
       <span x-show="loading" x-cloak>{% trans "Creating…" %}</span>
     </button>
+    {% endif %}
   </div>
 
   {% if not applications %}
@@ -29,7 +31,7 @@
        class="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-sky-600 sm:flex-row sm:items-center">
       <div>
         <p class="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">{{ app.reference }}</p>
-        <p class="mt-1 font-medium text-slate-900 dark:text-white">{{ app.get_loan_type_display }} · {{ app.get_status_display }}</p>
+        <p class="mt-1 font-medium text-slate-900 dark:text-white">{{ app.get_loan_type_display }}</p>
         <p class="text-sm text-slate-500">{{ app.created_at|date:"SHORT_DATETIME_FORMAT" }}</p>
       </div>
       <div class="mt-4 flex items-center gap-3 sm:mt-0">

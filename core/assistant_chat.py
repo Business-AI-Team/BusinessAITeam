@@ -1,7 +1,8 @@
 """
 Assistant conversationnel (OpenAI) pour expliquer un dossier ou donner des pistes d'amélioration.
 
-Trois sources de contexte injectées dans chaque échange :
+Quatre sources de contexte injectées dans chaque échange :
+  SOURCE 0 — Guide d'utilisation (admin) : PDF/texte configuré par l'admin selon le rôle + la page courante
   SOURCE 1 — Règles de l'institution (RAG) : chunks sémantiques depuis Chroma / PDF sur disque
   SOURCE 2 — Profil utilisateur          : données du customer + demande de prêt + analyse d'éligibilité
   SOURCE 3 — Documents fournis           : résumés des pièces justificatives uploadées
@@ -96,6 +97,39 @@ def _build_documents_context(application: LoanApplication | None) -> str:
     return "\n".join(lines) if lines else "Aucun document analysé pour le moment."
 
 
+# ── SOURCE 0 : guide d'utilisation (admin-configurable) ──────────────────────
+
+def _load_guide_text(actor_role: str, page_context: str) -> str:
+    """
+    Charge le texte du guide depuis AssistantGuideSource selon le rôle et la page.
+
+    Ordre de priorité :
+      1. Correspondance exacte (role == actor_role AND page_context == page_context)
+      2. Page spécifique + rôle "any"
+      3. Rôle spécifique + page "any"
+      4. any + any (guide global)
+
+    Plusieurs guides actifs peuvent correspondre ; tous sont concaténés.
+    """
+    from core.models import AssistantGuideSource
+    from django.db.models import Q
+
+    matching = AssistantGuideSource.objects.filter(active=True).filter(
+        Q(role=actor_role, page_context=page_context)
+        | Q(role="any", page_context=page_context)
+        | Q(role=actor_role, page_context="any")
+        | Q(role="any", page_context="any")
+    ).order_by("-role", "-page_context")
+
+    parts: list[str] = []
+    for guide in matching:
+        txt = guide.guide_text()
+        if txt:
+            parts.append(f"[{guide.title}]\n{txt[:3000]}")
+
+    return "\n\n".join(parts) if parts else ""
+
+
 # ── SOURCE 1 : règles RAG (institution) ───────────────────────────────────────
 
 def _build_rag_context(user_message: str, loan_type: str) -> str:
@@ -140,6 +174,21 @@ def _build_role_instructions(
     cust = getattr(application, "customer", None) if application else None
     customer_name = f"{cust.first_name} {cust.last_name}".strip() if cust else "le client"
 
+    if actor_role == "admin":
+        if is_fr:
+            return (
+                "Tu parles actuellement avec un ADMINISTRATEUR de l'application LoanWise (superutilisateur). "
+                "Adopte un ton technique et direct. "
+                "Tu peux répondre à toutes les questions sur le système, les règles, les configurations, "
+                "les données d'un dossier, les logs ou l'architecture. "
+                "N'omets aucun détail."
+            )
+        return (
+            "You are currently speaking with a LoanWise ADMINISTRATOR (superuser). "
+            "Be direct and technically precise. "
+            "Answer any questions about the system, rules, configurations, application data, logs, or architecture. "
+            "Omit nothing."
+        )
     if actor_role == "backoffice":
         if is_fr:
             return (
@@ -158,23 +207,22 @@ def _build_role_instructions(
             "Help the agent understand why the application was approved or rejected, "
             "and what actions they can take (request additional documents, manual validation, etc.)."
         )
-    else:
-        # customer / default
-        if is_fr:
-            return (
-                f"Tu parles actuellement avec « {customer_name} », le CLIENT propriétaire de cette demande de prêt. "
-                "Adopte un ton bienveillant, clair et pédagogique. "
-                "Explique les décisions en termes simples, sans jargon technique excessif. "
-                "Guide le client sur ce qu'il peut faire pour améliorer son dossier. "
-                "Ne divulgue pas de détails internes réservés au backoffice (règles de scoring internes, seuils bruts, etc.)."
-            )
+    # customer / default
+    if is_fr:
         return (
-            f"You are currently speaking with « {customer_name} », the CUSTOMER who owns this loan application. "
-            "Use a warm, clear, and educational tone. "
-            "Explain decisions in simple terms, avoiding excessive technical jargon. "
-            "Guide the customer on how to improve their application. "
-            "Do not disclose internal backoffice details (raw scoring rules, internal thresholds, etc.)."
+            f"Tu parles actuellement avec « {customer_name} », le CLIENT propriétaire de cette demande de prêt. "
+            "Adopte un ton bienveillant, clair et pédagogique. "
+            "Explique les décisions en termes simples, sans jargon technique excessif. "
+            "Guide le client sur ce qu'il peut faire pour améliorer son dossier. "
+            "Ne divulgue pas de détails internes réservés au backoffice (règles de scoring internes, seuils bruts, etc.)."
         )
+    return (
+        f"You are currently speaking with « {customer_name} », the CUSTOMER who owns this loan application. "
+        "Use a warm, clear, and educational tone. "
+        "Explain decisions in simple terms, avoiding excessive technical jargon. "
+        "Guide the customer on how to improve their application. "
+        "Do not disclose internal backoffice details (raw scoring rules, internal thresholds, etc.)."
+    )
 
 
 def build_assistant_reply(
@@ -184,10 +232,12 @@ def build_assistant_reply(
     user_email: str,
     application: LoanApplication | None,
     actor_role: str = "customer",
+    page_context: str = "home",
 ) -> dict[str, Any]:
     """Retourne ``{"reply": str}`` ou ``{"error": str}``.
 
-    actor_role: "customer" (default) ou "backoffice".
+    actor_role: "customer" (default), "backoffice" ou "admin".
+    page_context: identifiant de la page courante (home, dashboard, application_detail, …).
     """
     api_key = get_openai_api_key()
     if not api_key:
@@ -196,6 +246,7 @@ def build_assistant_reply(
     lang = (language or "fr").lower()
     loan_type = application.loan_type if application else ""
 
+    guide_ctx = _load_guide_text(actor_role, page_context)
     profile_ctx = _build_profile_context(user_email, application, lang)
     docs_ctx = _build_documents_context(application)
     rag_ctx = _build_rag_context(user_message, loan_type)
@@ -212,8 +263,17 @@ def build_assistant_reply(
 
     default_lang = "français" if lang.startswith("fr") else "English"
 
+    guide_block = ""
+    if guide_ctx:
+        guide_block = f"""
+══════════════════════════════════════════════════════
+SOURCE 0 — GUIDE D'UTILISATION (configuré par l'administrateur)
+══════════════════════════════════════════════════════
+{guide_ctx}
+"""
+
     system_prompt = f"""Tu es LoanWise, un assistant expert en éligibilité aux prêts.
-Tu disposes de TROIS sources d'information que tu dois toutes utiliser pour répondre avec précision.
+Tu disposes de QUATRE sources d'information que tu dois toutes utiliser pour répondre avec précision.
 
 {address_rule}
 
@@ -228,7 +288,7 @@ Ne promets jamais une approbation ; utilise un langage indicatif.
 RÔLE DE L'INTERLOCUTEUR
 ══════════════════════════════════════════════════════
 {role_instructions}
-
+{guide_block}
 ══════════════════════════════════════════════════════
 SOURCE 1 — RÈGLES DE L'INSTITUTION (base de connaissances RAG)
 ══════════════════════════════════════════════════════

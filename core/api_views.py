@@ -117,13 +117,17 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         return LoanApplicationSerializer
 
     def perform_create(self, serializer):
-        lang = serializer.validated_data.get("language") or self.request.user.preferred_language or "fr"
+        user = self.request.user
+        if can_access_all_applications(user) or user.is_staff:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Backoffice and admin users cannot create loan applications.")
+        lang = serializer.validated_data.get("language") or user.preferred_language or "fr"
         ac = serializer.validated_data.get("amount_currency")
         if not ac:
             prof = getattr(self.request.user, "customer_profile", None)
             ac = getattr(prof, "income_currency", None) if prof else None
         serializer.save(
-            user=self.request.user,
+            user=user,
             language=lang,
             current_step="documents",
             amount_currency=ac or "EUR",
@@ -346,13 +350,20 @@ class AssistantChatView(APIView):
             if app.user_id != request.user.id and not can_access_all_applications(request.user):
                 return Response({"detail": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
         lang = getattr(request.user, "preferred_language", "fr") or "fr"
-        actor_role = "backoffice" if can_access_all_applications(request.user) else "customer"
+        page_context = (request.data.get("page_context") or "home").strip()
+        if request.user.is_staff or request.user.is_superuser:
+            actor_role = "admin"
+        elif can_access_all_applications(request.user):
+            actor_role = "backoffice"
+        else:
+            actor_role = "customer"
         out = build_assistant_reply(
             user_message=msg,
             language=str(lang),
             user_email=request.user.email,
             application=app,
             actor_role=actor_role,
+            page_context=page_context,
         )
         if out.get("error"):
             return Response(out, status=status.HTTP_503_SERVICE_UNAVAILABLE)

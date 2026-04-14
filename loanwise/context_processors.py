@@ -13,4 +13,5 @@ def loanwise_globals(request):
         "FRONTEND_BASE_URL": getattr(settings, "FRONTEND_BASE_URL", ""),
         "LANG_PREFIX": lang_prefix,
         "lw_chat_app_id": None,
+        "lw_chat_page_context": "home",
     }

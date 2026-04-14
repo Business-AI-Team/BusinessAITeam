@@ -38,6 +38,7 @@ def home(request: HttpRequest) -> HttpResponse:
         {
             "commercial_name": "Smart Loan Eligibility Checker",
             "team": "Business AI Team (Tantely, Hasina, Hardi, Frederic)",
+            "lw_chat_page_context": "home",
         },
     )
 
@@ -120,13 +121,13 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     seed_default_requirements()
-    if is_backoffice_user(request.user):
+    if is_backoffice_user(request.user) or request.user.is_staff:
         return redirect("backoffice_dashboard")
     apps = LoanApplication.objects.filter(user=request.user)[:50]
     return render(
         request,
         "loanwise/dashboard.html",
-        {"applications": apps},
+        {"applications": apps, "lw_chat_page_context": "dashboard"},
     )
 
 
@@ -141,7 +142,7 @@ def backoffice_dashboard(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "loanwise/backoffice/dashboard.html",
-        {"applications": apps},
+        {"applications": apps, "lw_chat_page_context": "backoffice_dashboard"},
     )
 
 
@@ -192,6 +193,7 @@ def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "lw_customer_country_name": cust_country_name,
         "lw_currency_choices": Currency.choices,
         "lw_chat_app_id": app.pk,
+        "lw_chat_page_context": "application_detail",
         "lw_loan_type_choices": LoanType.choices,
         "lw_language_choices": Language.choices,
         "lw_portal_backoffice": app.user_id != request.user.id and can_access_all_applications(request.user),

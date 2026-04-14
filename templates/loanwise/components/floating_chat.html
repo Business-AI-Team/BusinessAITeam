@@ -116,7 +116,7 @@
         typing.innerHTML = '<div class="rounded-2xl bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs text-slate-500 italic">{% filter escapejs %}{% trans "Typing…" %}{% endfilter %}</div>';
         if (wrap) { wrap.appendChild(typing); wrap.scrollTop = wrap.scrollHeight; }
         try {
-          const body = { message: q };
+          const body = { message: q, page_context: '{{ lw_chat_page_context|default:"home" }}' };
           if (appId !== null && appId !== undefined && appId !== '') body.application_id = appId;
           const res = await fetch('/api/assistant/chat/', {
             method: 'POST',

@@ -10,12 +10,13 @@ from __future__ import annotations
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from rest_framework.authtoken.models import Token
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
+
 from core.models import (
     ApplicationDocument,
+    AssistantGuideSource,
     BackOffice,
     Customer,
     EligibilityKnowledgeSource,
@@ -92,15 +93,6 @@ class UserAdmin(BaseUserAdmin):
             return False
         return True
 
-
-@admin.register(Token)
-class TokenAdmin(admin.ModelAdmin):
-    """Jetons API REST ; supprimés en cascade si l’utilisateur est effacé."""
-
-    list_display = ("user", "created")
-    search_fields = ("user__email", "key")
-    raw_id_fields = ("user",)
-    ordering = ("-created",)
 
 
 @admin.register(Customer)
@@ -240,3 +232,64 @@ class IntegrationSettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(AssistantGuideSource)
+class AssistantGuideSourceAdmin(admin.ModelAdmin):
+    """
+    Usage guides for the AI assistant — uploaded as PDF/TXT/MD per role and page.
+    Text is extracted automatically on save and injected into the assistant prompt.
+    """
+
+    list_display = ("title", "role", "page_context", "active", "updated_at")
+    list_filter = ("role", "page_context", "active")
+    search_fields = ("title", "manual_text", "extracted_text")
+    readonly_fields = ("extracted_text", "updated_at", "created_at")
+    fieldsets = (
+        (None, {
+            "fields": ("title", "role", "page_context", "active"),
+        }),
+        (_("Content"), {
+            "fields": ("source_file", "manual_text", "extracted_text"),
+            "description": _(
+                "Upload a PDF/TXT/MD file OR type the guide directly in Manual text. "
+                "Manual text takes priority over the extracted file text."
+            ),
+        }),
+        (_("Timestamps"), {
+            "fields": ("updated_at", "created_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if obj.source_file and (not change or "source_file" in form.changed_data):
+            try:
+                extracted = extract_text_from_file(obj.source_file.path)
+                AssistantGuideSource.objects.filter(pk=obj.pk).update(extracted_text=extracted)
+                obj.refresh_from_db()
+            except Exception as exc:
+                self.message_user(
+                    request,
+                    f"Text extraction failed: {exc}",
+                    level="warning",
+                )
+
+
+# ── Masquer du panel Setup les sections inutiles ───────────────────────────
+# core/admin.py est chargé APRÈS rest_framework.authtoken (ordre INSTALLED_APPS)
+# donc Token est déjà enregistré quand ces lignes s'exécutent.
+from django.contrib.auth.models import Group  # noqa: E402
+
+try:
+    admin.site.unregister(Group)
+except admin.sites.NotRegistered:
+    pass
+
+try:
+    from rest_framework.authtoken.admin import TokenAdmin as _TokenAdmin  # noqa: F401
+    from rest_framework.authtoken.models import TokenProxy as _TokenProxy
+    admin.site.unregister(_TokenProxy)
+except (admin.sites.NotRegistered, ImportError):
+    pass

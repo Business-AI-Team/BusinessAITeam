@@ -32,21 +32,22 @@ _TEXT_SPLIT_CHUNK = 1000
 _TEXT_SPLIT_OVERLAP = 200
 
 try:
-    from langchain_chroma import Chroma
-    from langchain_core.documents import Document
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-    _LANGCHAIN_RAG_AVAILABLE = True
-except ImportError as _lc_err:
-    _LANGCHAIN_RAG_AVAILABLE = False
-    _lc_import_error = _lc_err
-    Chroma = Document = RecursiveCharacterTextSplitter = None  # type: ignore
-
-    logger.warning(
-        "LangChain RAG stack not importable (%s). Install: pip install langchain-chroma "
-        "langchain-text-splitters langchain-core langchain-openai",
-        _lc_import_error,
+    import importlib.util as _ilu
+    _LANGCHAIN_RAG_AVAILABLE = (
+        _ilu.find_spec("langchain_chroma") is not None
+        and _ilu.find_spec("langchain_core") is not None
+        and _ilu.find_spec("langchain_text_splitters") is not None
     )
+except Exception:
+    _LANGCHAIN_RAG_AVAILABLE = False
+
+if not _LANGCHAIN_RAG_AVAILABLE:
+    logger.warning(
+        "LangChain RAG stack not available. "
+        "Install: pip install langchain-chroma langchain-text-splitters langchain-core langchain-openai"
+    )
+
+Chroma = Document = RecursiveCharacterTextSplitter = None  # type: ignore
 
 _embeddings: Any = None
 _embedding_meta: str | None = None  # identifiant pour sous-dossier Chroma (change si modèle / backend change)
@@ -152,11 +153,12 @@ def _get_vector_store() -> Any:
     if not _LANGCHAIN_RAG_AVAILABLE:
         raise RuntimeError("LangChain RAG not available")
     if _vector_store is None:
+        from langchain_chroma import Chroma as _Chroma
         _ = _get_embeddings()
         sub = _embedding_meta or "default"
         persist = Path(settings.BASE_DIR) / "data" / _CHROMA_ROOT / sub
         persist.mkdir(parents=True, exist_ok=True)
-        _vector_store = Chroma(
+        _vector_store = _Chroma(
             collection_name=_COLLECTION_NAME,
             embedding_function=_embeddings,
             persist_directory=str(persist),
@@ -165,7 +167,8 @@ def _get_vector_store() -> Any:
 
 
 def _text_splitter() -> Any:
-    return RecursiveCharacterTextSplitter(
+    from langchain_text_splitters import RecursiveCharacterTextSplitter as _RCS
+    return _RCS(
         chunk_size=_TEXT_SPLIT_CHUNK,
         chunk_overlap=_TEXT_SPLIT_OVERLAP,
         add_start_index=True,
@@ -199,7 +202,8 @@ def index_eligibility_source(source_id: int, title: str, full_text: str) -> None
     if not text:
         return
 
-    doc = Document(
+    from langchain_core.documents import Document as _Document
+    doc = _Document(
         page_content=text,
         metadata={"source_id": str(source_id), "title": (title or "")[:500]},
     )

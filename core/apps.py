@@ -10,9 +10,8 @@ class CoreConfig(AppConfig):
     def ready(self) -> None:
         from core import signals  # noqa: F401 — register signal handlers
 
-        # Titres de l’interface /admin/ (évite la confusion avec le site public).
         from django.contrib import admin
 
         admin.site.site_header = "LoanWise"
         admin.site.site_title = _("Administration")
-        admin.site.index_title = _("LoanWise — users, applications, tokens")
+        admin.site.index_title = _("LoanWise — Setup")

@@ -1,10 +1,9 @@
 # LoanWise
 
 **Commercial name:** Smart Loan Eligibility Checker  
+**Team:** Business AI Team — Tantely, Hasina, Hardi, Frederic
 
-**Team:** Business AI Team — Tantely, Hasina, Hardi, Frederic  
-
-LoanWise is a **Django + DRF** hackathon project: **API-first** REST backend, **Swagger / Redoc** documentation, a **modern fintech-style** web UI (**Tailwind CSS** + **Alpine.js**), **full French/English** support for the interface and AI flows, and **dark mode** by default with a light/dark toggle.
+LoanWise is a **Django + DRF** fintech demo: an **API-first** REST backend with a **modern web UI** (Tailwind CSS + Alpine.js), **FR/EN** interface, **AI-assisted document analysis**, **deterministic eligibility scoring**, **RAG-powered policy guidance**, and **PDF reports**.
 
 ---
 
@@ -12,13 +11,30 @@ LoanWise is a **Django + DRF** hackathon project: **API-first** REST backend, **
 
 | Area | Description |
 |------|-------------|
-| **REST API** | Applications, chat, document upload, orchestration, PDF export — documented via OpenAPI. |
-| **Auth** | Registration, **email verification** (token link), **hashed passwords** (Django default). |
-| **Documents** | **SHA-256** fingerprinting; optional **delete after analysis** (`LOANWISE_DELETE_FILES_AFTER_ANALYSIS`). |
-| **Requirements** | Dynamic, DB-driven **document requirements** per loan type (extensible). |
-| **AI** | Configurable **LangGraph** bridge + step machine; **OpenAI** (vision, chat, RAG extraction) when a key is set (env or Admin); offline templates otherwise. |
-| **Business** | **ROI / impact** JSON on each application; **PDF** report (ReportLab). |
-| **UX** | Dashboard, per-application workspace, **progress** indicators, structured API errors. |
+| **Loan applications** | Customers create dossiers, fill in loan details (type, amount, currency, term, income), and track progress. |
+| **Document management** | Upload required documents per loan type (payslips, CIN, proof of address); **SHA-256** fingerprinting; configurable delete-after-analysis. |
+| **AI pipeline** | One-click orchestration: document extraction → consistency checks → deterministic eligibility score → RAG policy alignment → final decision. |
+| **Eligibility scoring** | Deterministic **debt-to-income** formula (income, amount, term, annual rate); cross-checked against uploaded document data; penalty for inconsistencies (e.g. address mismatch). |
+| **RAG guidance** | Policy PDFs uploaded in the admin are indexed in **Chroma** (OpenAI embeddings) and surfaced as loan-type-specific advice in the UI and reports. |
+| **AI assistant** | Contextual chatbot (OpenAI); different tone and detail level for **customers** vs **backoffice** agents. |
+| **PDF report** | Clean, branded **ReportLab** A4 report: verdict, loan details, repayment simulation, financial analysis bullets, policy notes, recommendations — in the user's language. |
+| **Backoffice dashboard** | Backoffice staff see all applications in a filterable table (eligibility, loan type, date range). |
+| **Multi-currency** | MGA, EUR, MUR — with configurable FX rates for DTI calculations. All monetary values in the PDF follow the loan's `amount_currency`. |
+| **FR / EN** | Full interface and AI flow localisation; language switcher in the header; PDF language follows the UI selection. |
+| **Dark / light mode** | User-level theme preference, persisted. |
+| **REST API** | Token or session auth; endpoints for applications, documents, orchestration, assistant, PDF export. |
+
+---
+
+## User roles
+
+| Role | Who | Access |
+|------|-----|--------|
+| **Customer** | Default registered users | Own loan applications only; customer dashboard; create/edit until the pipeline runs; upload documents; trigger orchestration; download PDF; chat as customer. |
+| **Backoffice** | Promoted via **Setup → BackOffice** | All applications; document download for any dossier; backoffice dashboard with filters; chat with richer technical context. |
+| **Superuser / Staff** | Django admin users | Full **Setup** panel (`/admin/`); treated as backoffice for application access. |
+
+Navigation adapts automatically: backoffice and staff users see the **Backoffice** link; customers see **My applications** — never both.
 
 ---
 
@@ -30,17 +46,17 @@ LoanWise is a **Django + DRF** hackathon project: **API-first** REST backend, **
 cd LoanWise
 python -m venv .venv
 .venv\Scripts\activate          # Windows
-# source .venv/bin/activate       # Linux / macOS
+# source .venv/bin/activate     # Linux / macOS
 pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and adjust variables (see below).
+Copy `.env.example` to `.env` and adjust the variables (see below).
 
 ### 2. Database
 
 ```bash
 python manage.py migrate
-python manage.py createsuperuser   # optional — admin at /admin/
+python manage.py createsuperuser   # admin at /admin/ ("Setup" in the UI)
 ```
 
 ### 3. Run
@@ -49,82 +65,167 @@ python manage.py createsuperuser   # optional — admin at /admin/
 python manage.py runserver
 ```
 
-- **Web app:** [http://127.0.0.1:8000/](http://127.0.0.1:8000/)  
-- **Swagger:** [http://127.0.0.1:8000/api/docs/swagger/](http://127.0.0.1:8000/api/docs/swagger/)  
-- **ReDoc:** [http://127.0.0.1:8000/api/docs/redoc/](http://127.0.0.1:8000/api/docs/redoc/)  
-- **OpenAPI schema:** [http://127.0.0.1:8000/api/schema/](http://127.0.0.1:8000/api/schema/)  
+- **Web app:** [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+- **Admin (Setup):** [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
-Email verification links in development use the **console email backend** (link printed in the terminal).
+### 4. Optional AI extras
 
-### 4. Optional AI dependencies
-
-RAG in `requirements.txt` uses **LangChain** with **OpenAI embeddings** (`OpenAIEmbeddings`) and Chroma. Heavier extras (PyTorch, LangGraph, etc.) are in `requirements-ai.txt`:
+LangGraph, PyTorch, and OCR dependencies are in a separate file to avoid bloating the base install:
 
 ```bash
 pip install -r requirements-ai.txt
 ```
 
-Then configure `.env` (`LOANWISE_LLM_PROVIDER=openai`, `OPENAI_API_KEY`) or add the key in **Admin → Integration settings**. Without a key, the app runs in **demo mode** (template replies and document analysis fallback).
+### 5. OpenAI key
+
+Set `OPENAI_API_KEY` in `.env` **or** add it via **Setup → Integration settings** in the admin. Without a key the app runs in **demo / fallback mode** (template replies, no vector search).
 
 ---
 
-## Internationalization (FR / EN)
+## Environment variables
 
-- UI languages: **Français** (default) and **English** — switcher in the header (`set_language` + `LocaleMiddleware`).
-- Each **loan application** stores a `language` field so the **chatbot** and **document analysis fallback text** follow the user’s choice.
-- To refresh translation catalogs after changing strings, update the `FR` dictionary in `scripts/build_i18n.py`, then run:
+**Django core**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DJANGO_SECRET_KEY` | insecure dev key | Change in production. |
+| `DJANGO_DEBUG` | `true` | Set `false` in production. |
+| `DJANGO_ALLOWED_HOSTS` | `*` | Comma-separated hosts. |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | — | Required in production for HTTPS. |
+| `DJANGO_DB_ENGINE` | `django.db.backends.sqlite3` | Any Django DB backend. |
+| `DJANGO_DB_NAME` | `db.sqlite3` | Database name / path. |
+
+**Upload limits**
+
+| Variable | Default |
+|----------|---------|
+| `DATA_UPLOAD_MAX_MEMORY_SIZE` | 15 MB |
+| `FILE_UPLOAD_MAX_MEMORY_SIZE` | 15 MB |
+
+**Business logic**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOANWISE_CURRENCY` | `EUR` | Default currency for the platform. |
+| `LOANWISE_FX_MGA_PER_EUR` | `4700` | Ariary per euro (indicative). |
+| `LOANWISE_FX_MUR_PER_EUR` | `49` | Mauritian rupee per euro (indicative). |
+| `LOANWISE_INTEREST_RATE_ANNUAL` | `0.05` | Annual rate used in repayment simulation. |
+| `LOANWISE_APPROVAL_THRESHOLD` | `55` | Score (0–100) above which a dossier is automatically validated. |
+| `LOANWISE_DELETE_FILES_AFTER_ANALYSIS` | `true` | Delete uploaded files once the AI has processed them. |
+
+**AI / OpenAI / RAG**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_API_KEY` | — | Also configurable via Admin. Env value takes precedence. |
+| `LOANWISE_LLM_PROVIDER` | `none` | `openai` to enable AI features. |
+| `LOANWISE_OPENAI_MODEL` | `gpt-4o-mini` | Chat / analysis model. |
+| `LOANWISE_OPENAI_VISION_MODEL` | same | Vision model for scanned documents. |
+| `LOANWISE_RAG_OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model for Chroma. |
+| `LOANWISE_RAG_LLM_MAX_CHARS` | `120000` | Max chars of policy text sent to the LLM. |
+| `LOANWISE_DOCUMENT_ANALYSIS_BACKEND` | `auto` | `openai`, `fallback`, or `auto`. |
+| `LOANWISE_USE_LANGGRAPH` | `false` | Enable LangGraph orchestration agent. |
+
+**Consistency checks**
+
+| Variable | Default |
+|----------|---------|
+| `LOANWISE_DOC_INCOME_TOLERANCE_PERCENT` | `20` |
+| `LOANWISE_ADDRESS_OVERLAP_MIN` | `0.55` |
+| `LOANWISE_CONSISTENCY_MAX_SCORE_PENALTY` | `30` |
+
+---
+
+## API overview
+
+Authentication: `Authorization: Token <key>` or a browser session (CSRF required for session POSTs).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/register/` | Create account. |
+| `POST` | `/api/auth/login/` | Returns `{ "token": "...", "user": {...} }`. |
+| `GET / PATCH` | `/api/auth/me/` | Profile (`preferred_language`, `theme_preference`, …). |
+| `GET / POST` | `/api/applications/` | List or create loan applications. |
+| `PATCH` | `/api/applications/{id}/` | Update loan details. |
+| `POST` | `/api/applications/{id}/orchestrate/` | Run full AI + scoring pipeline. |
+| `POST` | `/api/applications/{id}/force_validate/` | Backoffice — manually validate a dossier. |
+| `GET` | `/api/applications/{id}/export_pdf/` | Download PDF report (language follows the current UI language). |
+| `POST` | `/api/documents/upload/{application_id}/` | Upload a document (multipart). |
+| `GET` | `/api/documents/{document_id}/download/` | Download a document (owner or backoffice). |
+| `GET` | `/api/requirements/` | Document requirements per loan type. |
+| `POST` | `/api/seed/` | Seed default document requirements. |
+| `POST` | `/api/assistant/chat/` | Send a message to the AI assistant. |
+| `GET` | `/api/health/` | Health check. |
+
+---
+
+## Internationalization
+
+- Languages: **Français** (default, no URL prefix) and **English** (`/en/…`).
+- Language switcher in the header updates both the UI and the URL prefix.
+- PDF language follows the UI language at the time of download.
+- To update translations after changing strings:
 
 ```bash
 pip install polib
 python scripts/build_i18n.py
 ```
 
-(On systems with GNU gettext you can alternatively use `makemessages` / `compilemessages`.)
-
----
-
-## API overview (session or token)
-
-- `POST /api/auth/register/` — create account (verification email).  
-- `GET /api/auth/verify/?token=...` — verify email.  
-- `POST /api/auth/login/` — returns `{ "token": "...", "user": {...} }`.  
-- `GET/PATCH /api/auth/me/` — profile (e.g. `preferred_language`, `theme_preference`).  
-- `GET/POST /api/applications/` — list/create loan applications.  
-- `PATCH /api/applications/{id}/` — update loan details (`loan_type`, `language`, `amount_requested`, `term_months`, `annual_income`, `purpose`, …).  
-- `POST /api/documents/upload/{application_id}/` — multipart `file`, optional `requirement_id`, `kind`.  
-- `POST /api/applications/{id}/orchestrate/` — full pipeline (requires **verified email**).  
-- `GET /api/applications/{id}/export_pdf/` — PDF download.  
-- `GET /api/requirements/?lang=fr` — document requirements (labels by language).  
-- `POST /api/seed/` — seed default document requirements (authenticated).  
-
-Use `Authorization: Token <key>` or a logged-in **browser session** (CSRF required for session POSTs).
-
 ---
 
 ## Project layout
 
 ```
-loanwise/
-├── core/                 # Models, services, agents, API, admin
-├── templates/loanwise/   # HTML (Tailwind + Alpine)
-├── static/
-├── locale/               # optional: compiled gettext catalogs
+LoanWise/
+├── core/
+│   ├── models.py                  # User, Customer, BackOffice, LoanApplication, …
+│   ├── api_views.py               # DRF viewsets and actions
+│   ├── web_views.py               # Server-rendered pages
+│   ├── loan_engine.py             # Deterministic eligibility scoring + ROI
+│   ├── loan_orchestrator_agent.py # Pipeline: doc analysis → scoring → decision
+│   ├── document_processor.py      # AI document extraction (OpenAI vision / fallback)
+│   ├── document_consistency.py    # Cross-check declared vs extracted data
+│   ├── eligibility_explanation.py # Structured FR/EN explanation builder
+│   ├── rag_eligibility.py         # LangChain + Chroma RAG on policy PDFs
+│   ├── assistant_chat.py          # AI assistant with role-aware context
+│   ├── pdf_report.py              # ReportLab PDF generation
+│   ├── currency_fx.py             # MGA / EUR / MUR conversions
+│   ├── admin.py                   # Custom Django admin (Setup panel)
+│   ├── serializers.py
+│   ├── urls.py                    # API routes
+│   └── web_urls.py                # Web routes
+├── loanwise/
+│   ├── settings.py
+│   ├── urls.py
+│   └── context_processors.py
+├── templates/loanwise/
+│   ├── base.html
+│   ├── dashboard.html             # Customer: own applications
+│   ├── application_detail.html    # Per-dossier workspace
+│   ├── backoffice/dashboard.html  # Staff: all applications, filterable
+│   └── components/                # Reusable UI fragments (chat, uploads)
+├── templates/admin/               # Custom Setup panel skin
+├── static/                        # JS, logos
+├── locale/                        # Compiled gettext catalogs (FR / EN)
+├── data/chroma_langchain/         # Chroma vector store (auto-created)
+├── media/                         # User uploads (runtime)
+├── scripts/build_i18n.py
 ├── manage.py
 ├── requirements.txt
 ├── requirements-ai.txt
-├── .env.example
-└── README.md
+└── .env.example
 ```
 
 ---
 
-## Security notes (hackathon vs production)
+## Security notes
 
-- Change `DJANGO_SECRET_KEY`, disable `DEBUG`, use a real **SMTP** backend, HTTPS, and strict `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` in production.
-- Face and vision models may pull large weights; run them only on trusted infrastructure.
+- Change `DJANGO_SECRET_KEY`, set `DEBUG=false`, configure `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`, and use HTTPS in any non-development environment.
+- Document files are deleted after AI analysis by default (`LOANWISE_DELETE_FILES_AFTER_ANALYSIS=true`).
+- The OpenAI key stored in the database is **not** exposed through the API.
 
 ---
 
 ## License
 
-Hackathon / demo use — adapt licensing to your organization as needed.
+Hackathon / demo use — adapt licensing to your organisation as needed.

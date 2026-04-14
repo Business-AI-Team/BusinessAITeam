@@ -163,13 +163,11 @@ def build_application_pdf(application: LoanApplication, lang: str | None = None)
     story.append(Spacer(1, 0.4 * cm))
 
     # ── Reference / date ───────────────────────────────────────────────────
-    ref_label    = "Référence" if is_fr else "Reference"
-    date_label   = "Date" if is_fr else "Date"
-    status_label = "Statut" if is_fr else "Status"
+    ref_label  = "Référence" if is_fr else "Reference"
+    date_label = "Date" if is_fr else "Date"
     story.append(Paragraph(
         f"<b>{ref_label}:</b> {application.reference}&nbsp;&nbsp;&nbsp;"
-        f"<b>{date_label}:</b> {date.today().strftime('%d/%m/%Y')}&nbsp;&nbsp;&nbsp;"
-        f"<b>{status_label}:</b> {application.get_status_display()}",
+        f"<b>{date_label}:</b> {date.today().strftime('%d/%m/%Y')}",
         S["body"],
     ))
     story.append(Spacer(1, 0.4 * cm))

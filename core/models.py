@@ -494,6 +494,84 @@ class EligibilityKnowledgeSource(models.Model):
         return "\n\n".join(kept).strip()
 
 
+class AssistantGuideSource(models.Model):
+    """
+    Usage guides for the AI assistant, configurable by admins via the Setup panel.
+
+    Each guide is a PDF describing how the assistant should behave for a specific
+    role (customer, backoffice, admin) and page context (home, dashboard, etc.).
+    The assistant injects the matching guide text into its system prompt before
+    the RAG eligibility rules block.
+    """
+
+    ROLE_CHOICES = [
+        ("customer",  _("Customer")),
+        ("backoffice", _("Backoffice")),
+        ("admin",     _("Admin")),
+        ("any",       _("All roles")),
+    ]
+    PAGE_CHOICES = [
+        ("home",                 _("Home")),
+        ("dashboard",            _("Customer dashboard")),
+        ("application_detail",   _("Application detail")),
+        ("backoffice_dashboard", _("Backoffice dashboard")),
+        ("any",                  _("All pages")),
+    ]
+
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default="any",
+        verbose_name=_("Role"),
+        help_text=_("User role this guide applies to."),
+    )
+    page_context = models.CharField(
+        max_length=40,
+        choices=PAGE_CHOICES,
+        default="any",
+        verbose_name=_("Page"),
+        help_text=_("Page/section where this guide is injected."),
+    )
+    title = models.CharField(max_length=200)
+    source_file = models.FileField(
+        upload_to="assistant_guides/%Y/%m/",
+        validators=[
+            FileExtensionValidator(allowed_extensions=["pdf", "txt", "md"]),
+        ],
+        blank=True,
+        help_text=_("Upload a PDF, TXT or MD file. Text is extracted automatically."),
+    )
+    extracted_text = models.TextField(
+        blank=True,
+        editable=False,
+        help_text=_("Auto-extracted from the uploaded file."),
+    )
+    manual_text = models.TextField(
+        blank=True,
+        help_text=_("Optional: type or paste the guide content directly here."),
+    )
+    active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["role", "page_context"]
+        verbose_name = _("Assistant guide")
+        verbose_name_plural = _("Assistant guides")
+
+    def __str__(self) -> str:
+        return f"{self.get_role_display()} / {self.get_page_context_display()} — {self.title}"
+
+    def guide_text(self) -> str:
+        """Return the best available text: manual_text overrides extracted."""
+        parts = []
+        if self.manual_text.strip():
+            parts.append(self.manual_text.strip())
+        elif self.extracted_text.strip():
+            parts.append(self.extracted_text.strip())
+        return "\n\n".join(parts)
+
+
 class IntegrationSettings(models.Model):
     """
     Singleton (pk=1): OpenAI and other API credentials editable in Admin.
