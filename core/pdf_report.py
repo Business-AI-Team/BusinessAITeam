@@ -21,8 +21,28 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from core.currency_fx import convert_amount
+from core.currency_fx import convert_amount, format_money
 from core.models import LoanApplication
+
+
+def _fmt_rag(amount_val: Any, rag_ccy: str, display_ccy: str) -> str:
+    """
+    Format a RAG-sourced monetary value for PDF display.
+
+    Primary value is always in ``display_ccy`` (the user's loan currency).
+    When ``rag_ccy`` differs, the original RAG amount is appended in parentheses.
+
+    Example: 4 800 Ar  →  _fmt_rag(4800, "MGA", "EUR")  →  "1.02 EUR (4 800.00 MGA)"
+    """
+    from decimal import Decimal
+    try:
+        d = Decimal(str(amount_val))
+        if rag_ccy.upper() == display_ccy.upper():
+            return format_money(d, display_ccy)
+        converted = convert_amount(d, rag_ccy, display_ccy)
+        return f"{format_money(converted, display_ccy)} ({format_money(d, rag_ccy)})"
+    except Exception:
+        return str(amount_val)
 
 # ── Brand colours ──────────────────────────────────────────────────────────
 C_PRIMARY   = colors.HexColor("#0284c7")   # sky-600
@@ -213,33 +233,37 @@ def build_application_pdf(application: LoanApplication, lang: str | None = None)
     amt_ccy = application.amount_currency or "EUR"
     inc_ccy = getattr(cust, "income_currency", None) or amt_ccy
 
-    # Revenu converti dans la même devise que le montant pour affichage cohérent
-    income_raw = application.annual_income
+    # Use effective_annual_income: declared profile income, then payslip estimate.
+    from decimal import Decimal as _D
+    _declared = (getattr(cust, "annual_income", None) or _D("0")) + (application.annual_income or _D("0"))
+    income_raw = application.effective_annual_income
+    income_is_estimated = bool(income_raw and income_raw > 0 and _declared <= 0)
     try:
-        from decimal import Decimal as _D
         income_display = convert_amount(_D(str(income_raw)), inc_ccy, amt_ccy) if income_raw else None
     except Exception:
         income_display = income_raw
 
     if is_fr:
+        _income_label = "Revenu annuel estimé (bulletins)" if income_is_estimated else "Revenu annuel déclaré"
         loan_rows = [
             ["Champ", "Valeur"],
             ["Client", customer_name or "—"],
             ["Type de prêt", application.get_loan_type_display()],
             ["Montant demandé", _fmt_amount(application.amount_requested, amt_ccy)],
             ["Durée", f"{application.term_months} mois" if application.term_months else "—"],
-            ["Revenu annuel déclaré", _fmt_amount(income_display, amt_ccy)],
+            [_income_label, _fmt_amount(income_display, amt_ccy)],
             ["Score d'éligibilité", _fmt_score(score)],
             ["Seuil d'approbation", f"{threshold:.0f} / 100"],
         ]
     else:
+        _income_label_en = "Estimated annual income (payslips)" if income_is_estimated else "Declared annual income"
         loan_rows = [
             ["Field", "Value"],
             ["Customer", customer_name or "—"],
             ["Loan type", application.get_loan_type_display()],
             ["Amount requested", _fmt_amount(application.amount_requested, amt_ccy)],
             ["Term", f"{application.term_months} months" if application.term_months else "—"],
-            ["Declared annual income", _fmt_amount(income_display, amt_ccy)],
+            [_income_label_en, _fmt_amount(income_display, amt_ccy)],
             ["Eligibility score", _fmt_score(score)],
             ["Approval threshold", f"{threshold:.0f} / 100"],
         ]
@@ -291,10 +315,74 @@ def build_application_pdf(application: LoanApplication, lang: str | None = None)
         story.append(_table(rep_rows, [8 * cm, W - 8 * cm]))
         story.append(Spacer(1, 0.3 * cm))
 
-    # ── Financial analysis ─────────────────────────────────────────────────
-    fin_bullets: list[str] = list(
-        detail.get("financial_bullets_fr" if is_fr else "financial_bullets_en") or []
-    )
+    # ── Financial analysis — computed dynamically in amt_ccy ───────────────
+    fin_bullets: list[str] = []
+    try:
+        from decimal import Decimal as _D2
+        from core.currency_fx import convert_amount as _conv, format_money as _fmt_m
+        from django.conf import settings as _st
+
+        _inc_ccy = getattr(cust, "income_currency", None) or amt_ccy
+        _income_raw = application.effective_annual_income
+        _months2 = max(1, application.term_months or 12)
+        _rate2 = _D2(str(roi.get("annual_rate_assumed") or
+                         getattr(_st, "LOANWISE_INTEREST_RATE_ANNUAL", 0.05)))
+        _score_f = float(application.eligibility_score) if application.eligibility_score is not None else 0.0
+        _thr = float(detail.get("threshold") or 55.0)
+
+        if _income_raw and application.amount_requested:
+            # Compute payment in inc_ccy (amount converted to inc_ccy), then display in amt_ccy
+            _amt_in_inc = _conv(_D2(str(application.amount_requested)), amt_ccy, _inc_ccy)
+            _mr2 = _rate2 / _D2("12")
+            if _mr2 > 0:
+                _p2 = (_D2("1") + _mr2) ** _months2
+                _pay_inc = _amt_in_inc * (_mr2 * _p2) / (_p2 - _D2("1"))
+            else:
+                _pay_inc = _amt_in_inc / _D2(_months2)
+            _mon_inc = _income_raw / _D2("12")
+
+            # Convert all display values to amt_ccy
+            if _inc_ccy != amt_ccy:
+                _income_d = _conv(_income_raw, _inc_ccy, amt_ccy)
+                _pay_d = _conv(_pay_inc, _inc_ccy, amt_ccy)
+                _mon_d = _conv(_mon_inc, _inc_ccy, amt_ccy)
+            else:
+                _income_d, _pay_d, _mon_d = _income_raw, _pay_inc, _mon_inc
+
+            _dti_pct = float((_pay_inc / _mon_inc * _D2("100"))) if _mon_inc > 0 else 0.0
+
+            if is_fr:
+                fin_bullets = [
+                    f"Revenu annuel utilisé : {_fmt_m(_income_d, amt_ccy)} (profil ou estimation bulletins).",
+                    f"Mensualité estimée en {amt_ccy} (taux annuel {float(_rate2):.0%}, {_months2} mois) : {_fmt_m(_pay_d, amt_ccy)}.",
+                    f"Revenu mensuel ({amt_ccy}) : {_fmt_m(_mon_d, amt_ccy)} — charge / revenu ~{_dti_pct:.1f} %.",
+                    f"Score d'éligibilité calculé : {_score_f:.2f} / 100 (seuil interne : {_thr:.0f}).",
+                ]
+            else:
+                fin_bullets = [
+                    f"Annual income used: {_fmt_m(_income_d, amt_ccy)} (profile or payslip estimate).",
+                    f"Estimated monthly payment in {amt_ccy} (annual rate {float(_rate2):.0%}, {_months2} months): {_fmt_m(_pay_d, amt_ccy)}.",
+                    f"Monthly income ({amt_ccy}): {_fmt_m(_mon_d, amt_ccy)} — payment-to-income ~{_dti_pct:.1f}%.",
+                    f"Computed eligibility score: {_score_f:.2f} / 100 (internal threshold: {_thr:.0f}).",
+                ]
+            # Append address blocker note if applicable
+            if address_blocker:
+                if is_fr:
+                    fin_bullets.append(
+                        "Incohérence d'adresse : l'adresse déclarée sur le profil ne correspond pas à celle "
+                        "lisible sur les pièces. Le dossier n'est pas recevable tant que l'adresse n'est pas alignée."
+                    )
+                else:
+                    fin_bullets.append(
+                        "Address mismatch: the address on your profile does not match what is readable on your "
+                        "documents. The application cannot be accepted until addresses are consistent."
+                    )
+    except Exception:
+        # Fallback to stored bullets if dynamic computation fails
+        fin_bullets = list(
+            detail.get("financial_bullets_fr" if is_fr else "financial_bullets_en") or []
+        )
+
     if fin_bullets:
         story.append(Paragraph(
             "Analyse financière" if is_fr else "Financial analysis",
@@ -305,13 +393,115 @@ def build_application_pdf(application: LoanApplication, lang: str | None = None)
             story.append(Spacer(1, 0.1 * cm))
         story.append(Spacer(1, 0.2 * cm))
 
-    # ── Policy notes (min/max amount, income floor) ────────────────────────
-    policy_bullets: list[str] = list(
-        detail.get("policy_bullets_fr" if is_fr else "policy_bullets_en") or []
-    )
+    # ── Policy notes — regenerated dynamically so all amounts use amt_ccy ────
+    # RAG-sourced figures are shown in amt_ccy with the original RAG value in
+    # parentheses when the currencies differ  e.g. "23 500 000 MGA (5 000 EUR)".
+    policy_bullets: list[str] = []
+    try:
+        from decimal import Decimal as _D3
+
+        _pol_ccy: str = str(detail.get("policy_currency") or amt_ccy)
+        _min_amt = detail.get("policy_guidance_min_amount")
+        _max_amt = detail.get("policy_guidance_max_amount")
+        _inc_floor = detail.get("rag_income_floor_detected")
+        _fin_ok: bool = bool(detail.get("financial_inputs_complete"))
+        _inc_ccy_p: str = getattr(cust, "income_currency", None) or amt_ccy
+
+        if _fin_ok and _min_amt is not None and _max_amt is not None:
+            try:
+                _a = float(application.amount_requested or 0)
+                _mn, _mx = float(_min_amt), float(_max_amt)
+                if _a < _mn:
+                    if is_fr:
+                        policy_bullets.append(
+                            f"Les documents de politique indiquent un montant minimum d'emprunt "
+                            f"d'environ {_fmt_rag(_mn, _pol_ccy, amt_ccy)} — "
+                            f"votre demande ({format_money(_D3(str(_a)), amt_ccy)}) est en dessous."
+                        )
+                    else:
+                        policy_bullets.append(
+                            f"Policy documents suggest a minimum loan amount around "
+                            f"{_fmt_rag(_mn, _pol_ccy, amt_ccy)} — "
+                            f"your request ({format_money(_D3(str(_a)), amt_ccy)}) is below that range."
+                        )
+                elif _a > _mx:
+                    if is_fr:
+                        policy_bullets.append(
+                            f"Les documents de politique indiquent un plafond d'environ "
+                            f"{_fmt_rag(_mx, _pol_ccy, amt_ccy)} — "
+                            f"votre demande ({format_money(_D3(str(_a)), amt_ccy)}) le depasse."
+                        )
+                    else:
+                        policy_bullets.append(
+                            f"Policy documents suggest a maximum around "
+                            f"{_fmt_rag(_mx, _pol_ccy, amt_ccy)} — "
+                            f"your request ({format_money(_D3(str(_a)), amt_ccy)}) exceeds it."
+                        )
+                else:
+                    if is_fr:
+                        policy_bullets.append(
+                            f"Le montant demande se situe dans la fourchette indicative "
+                            f"({_fmt_rag(_mn, _pol_ccy, amt_ccy)} - {_fmt_rag(_mx, _pol_ccy, amt_ccy)})."
+                        )
+                    else:
+                        policy_bullets.append(
+                            f"The requested amount is within the indicative range from policy "
+                            f"({_fmt_rag(_mn, _pol_ccy, amt_ccy)} - {_fmt_rag(_mx, _pol_ccy, amt_ccy)})."
+                        )
+            except (TypeError, ValueError):
+                pass
+
+        if _fin_ok and _inc_floor is not None:
+            try:
+                _income_val = application.effective_annual_income or _D3("0")
+                # Convert income to policy_ccy for comparison (apples-to-apples)
+                _income_in_pol = float(
+                    convert_amount(_D3(str(_income_val)), _inc_ccy_p, _pol_ccy)
+                    if _inc_ccy_p != _pol_ccy else _D3(str(_income_val))
+                )
+                _floor_int = int(_inc_floor)
+                # Display income in amt_ccy
+                _income_disp = (
+                    convert_amount(_D3(str(_income_val)), _inc_ccy_p, amt_ccy)
+                    if _inc_ccy_p != amt_ccy else _D3(str(_income_val))
+                )
+                if _income_in_pol < _floor_int:
+                    if is_fr:
+                        policy_bullets.append(
+                            f"D'apres les extraits de politique indexes, un revenu annuel d'au moins "
+                            f"environ {_fmt_rag(_floor_int, _pol_ccy, amt_ccy)} est mentionne — "
+                            f"le revenu utilise ({format_money(_income_disp, amt_ccy)}) est inferieur."
+                        )
+                    else:
+                        policy_bullets.append(
+                            f"Indexed policy excerpts mention an annual income of at least about "
+                            f"{_fmt_rag(_floor_int, _pol_ccy, amt_ccy)} — "
+                            f"income used ({format_money(_income_disp, amt_ccy)}) is below that benchmark."
+                        )
+                else:
+                    if is_fr:
+                        policy_bullets.append(
+                            f"Par rapport aux extraits de politique (repere de revenu annuel d'environ "
+                            f"{_fmt_rag(_floor_int, _pol_ccy, amt_ccy)}), "
+                            f"le revenu utilise ({format_money(_income_disp, amt_ccy)}) atteint ce niveau."
+                        )
+                    else:
+                        policy_bullets.append(
+                            f"Compared to policy excerpts (annual income benchmark around "
+                            f"{_fmt_rag(_floor_int, _pol_ccy, amt_ccy)}), "
+                            f"income used ({format_money(_income_disp, amt_ccy)}) meets or exceeds it."
+                        )
+            except Exception:
+                pass
+    except Exception:
+        # Fallback to stored bullets
+        policy_bullets = list(
+            detail.get("policy_bullets_fr" if is_fr else "policy_bullets_en") or []
+        )
+
     if policy_bullets:
         story.append(Paragraph(
-            "Politique de crédit" if is_fr else "Credit policy",
+            "Politique de credit" if is_fr else "Credit policy",
             S["section"],
         ))
         for b in policy_bullets:

@@ -9,28 +9,39 @@
 >
   <template x-for="slot in slots" :key="slot.requirement_id">
     <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+
+      <!-- Header: label + counter -->
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p class="text-sm font-semibold text-slate-900 dark:text-slate-100" x-text="slot.label"></p>
           <p class="mt-1 text-xs text-slate-600 dark:text-slate-400" x-text="slot.description"></p>
         </div>
         <span
-          class="shrink-0 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-800 dark:bg-slate-700 dark:text-slate-200"
-          x-text="slot.uploaded + ' / ' + slot.files_needed'"
+          class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums transition"
+          :class="slot.uploaded >= slot.files_needed
+            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+            : 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200'"
+          x-text="slot.uploaded + ' / ' + slot.files_needed"
         ></span>
       </div>
+
+      <!-- Drop zone (hidden once slot is full) -->
       <div
+        x-show="slot.uploaded < slot.files_needed"
         class="mt-3 rounded-xl border border-dashed border-slate-300 bg-white/90 p-3 transition dark:border-slate-600 dark:bg-slate-950/40"
         :class="dragOverId === slot.requirement_id ? 'border-sky-500 bg-sky-50/50 dark:border-sky-500' : ''"
         @dragover.prevent="dragOverId = slot.requirement_id"
         @dragleave.prevent="dragOverId = null"
         @drop.prevent="onDropSlot($event, slot)"
-        x-show="slot.uploaded < slot.files_needed"
       >
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-xs text-slate-600 dark:text-slate-400">{% trans "PDF or image — drag & drop or choose a file." %}</p>
+          <p class="text-xs text-slate-600 dark:text-slate-400">
+            {% trans "PDF or image — drag & drop (multiple files at once) or choose." %}
+          </p>
+          <!-- Hidden multi-file input -->
           <input
             type="file"
+            multiple
             class="hidden"
             :id="'fup-' + slot.requirement_id"
             :accept="acceptTypes"
@@ -42,15 +53,44 @@
             @click="openPicker(slot.requirement_id)"
             :disabled="uploadingId === slot.requirement_id || slot.uploaded >= slot.files_needed"
           >
-            <span x-show="uploadingId !== slot.requirement_id">{% trans "Choose file" %}</span>
+            <span x-show="uploadingId !== slot.requirement_id">{% trans "Choose file(s)" %}</span>
             <span x-show="uploadingId === slot.requirement_id" x-cloak>{% trans "Uploading…" %}</span>
           </button>
         </div>
       </div>
+
+      <!-- Uploaded files list -->
+      <template x-if="uploadedFiles[slot.requirement_id] && uploadedFiles[slot.requirement_id].length > 0">
+        <ul class="mt-3 space-y-1.5">
+          <template x-for="f in (uploadedFiles[slot.requirement_id] || [])" :key="f.id">
+            <li class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-base shrink-0">📄</span>
+                <span class="truncate text-xs text-slate-700 dark:text-slate-300" x-text="f.name"></span>
+              </div>
+              <button
+                type="button"
+                class="shrink-0 rounded-full p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition"
+                :title="'{% filter escapejs %}{% trans "Supprimer ce fichier" %}{% endfilter %}'"
+                @click="removeFile(f.id, slot)"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+              </button>
+            </li>
+          </template>
+        </ul>
+      </template>
+
+      <!-- Completed badge -->
       <p class="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400" x-show="slot.uploaded >= slot.files_needed" x-cloak>
-        {% trans "Complete" %}
+        ✔ {% trans "Complete" %}
       </p>
+
+      <!-- Error -->
       <p class="mt-2 text-xs text-rose-600 dark:text-rose-400" x-show="errorId === slot.requirement_id" x-text="lastError"></p>
+
     </div>
   </template>
 </div>

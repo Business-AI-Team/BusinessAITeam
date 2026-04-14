@@ -104,17 +104,6 @@ def seed_default_requirements() -> int:
             "payslip_distinct_months_window": 3,
             "sort_order": 30,
         },
-        {
-            "code": "business_plan",
-            "label_fr": "Business plan",
-            "label_en": "Business plan",
-            "description_fr": "Pour les prêts professionnels.",
-            "description_en": "For business loans.",
-            "applies_to_loan_types": [LoanType.BUSINESS],
-            "is_required": True,
-            "min_files": 1,
-            "sort_order": 40,
-        },
     ]
     created = 0
     for row in defaults:

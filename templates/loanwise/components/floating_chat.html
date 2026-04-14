@@ -31,6 +31,10 @@
       open: false,
       busy: false,
       input: '',
+      /* Conversation history sent to the backend on every message.
+         Each entry: { role: "user"|"assistant", content: "plain text" }
+         Capped at the last 20 messages (10 exchanges) to avoid token overflow. */
+      history: [],
 
       getCookie(name) {
         const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
@@ -116,7 +120,12 @@
         typing.innerHTML = '<div class="rounded-2xl bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs text-slate-500 italic">{% filter escapejs %}{% trans "Typing…" %}{% endfilter %}</div>';
         if (wrap) { wrap.appendChild(typing); wrap.scrollTop = wrap.scrollHeight; }
         try {
-          const body = { message: q, page_context: '{{ lw_chat_page_context|default:"home" }}' };
+          /* Include conversation history so the AI remembers previous turns */
+          const body = {
+            message: q,
+            page_context: '{{ lw_chat_page_context|default:"home" }}',
+            history: this.history.slice(-20),
+          };
           if (appId !== null && appId !== undefined && appId !== '') body.application_id = appId;
           const res = await fetch('/api/assistant/chat/', {
             method: 'POST',
@@ -133,6 +142,9 @@
           const html = this.mdToHtml(String(reply));
           if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
           this.addMessage('ai', html, true);
+          /* Save the exchange in history (plain text, not HTML) */
+          this.history.push({ role: 'user', content: q });
+          this.history.push({ role: 'assistant', content: String(reply) });
         } catch (e) {
           if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
           this.addMessage('ai', '{% filter escapejs %}{% trans "Network error. Please try again." %}{% endfilter %}', false);

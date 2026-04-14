@@ -154,16 +154,59 @@ class ApplicationDocumentAdmin(admin.ModelAdmin):
 class EligibilityKnowledgeSourceAdmin(admin.ModelAdmin):
     """
     PDF / images (JPEG, PNG, WebP) + optional manual text → extracted, chunked, indexed for RAG.
+
+    LangChain RAG pipeline: Load (PyMuPDFLoader / PyPDFLoader / TextLoader)
+      → Split (RecursiveCharacterTextSplitter) → Store (Chroma) → Retrieve (similarity_search).
     """
 
-    list_display = ("title", "is_active", "last_indexed_at", "created_at")
+    list_display = ("title", "is_active", "has_text", "last_indexed_at", "created_at")
     list_filter = ("is_active",)
     search_fields = ("title", "manual_text", "extracted_text")
     readonly_fields = ("extracted_text", "last_indexed_at", "created_at", "updated_at")
+    actions = ["reindex_sources"]
     fieldsets = (
         (None, {"fields": ("title", "file", "manual_text", "is_active")}),
         (_("Indexed content"), {"fields": ("extracted_text", "last_indexed_at", "created_at", "updated_at")}),
     )
+
+    @admin.display(boolean=True, description=_("Has text"))
+    def has_text(self, obj: EligibilityKnowledgeSource) -> bool:
+        """True when the source has indexable text (manual_text or extracted_text)."""
+        return bool(obj.searchable_blob())
+
+    @admin.action(description=_("Re-index selected sources (extract text + rebuild Chroma)"))
+    def reindex_sources(self, request, queryset):
+        """
+        Admin bulk action: re-runs the full LangChain Load → Split → Store pipeline
+        for every selected source. Use this when:
+          - A source was saved before the OpenAI API key was configured.
+          - The file changed on disk but was not re-uploaded.
+          - extracted_text is empty and you want to retry extraction.
+        """
+        count = 0
+        for obj in queryset:
+            if obj.file:
+                extracted = extract_text_from_file(obj.file.path)
+                EligibilityKnowledgeSource.objects.filter(pk=obj.pk).update(
+                    extracted_text=extracted
+                )
+                obj.refresh_from_db()
+            full = obj.searchable_blob()
+            file_path = obj.file.path if obj.file else None
+            if obj.is_active:
+                index_eligibility_source(
+                    obj.pk, obj.title or "", full, file_path=file_path
+                )
+                EligibilityKnowledgeSource.objects.filter(pk=obj.pk).update(
+                    last_indexed_at=timezone.now()
+                )
+                count += 1
+            else:
+                delete_eligibility_source_index(obj.pk)
+        self.message_user(
+            request,
+            _("%(count)d source(s) re-indexed successfully.") % {"count": count},
+        )
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -173,8 +216,11 @@ class EligibilityKnowledgeSourceAdmin(admin.ModelAdmin):
             EligibilityKnowledgeSource.objects.filter(pk=obj.pk).update(extracted_text=extracted)
             obj.refresh_from_db()
         full = obj.searchable_blob()
-        if obj.is_active and full.strip():
-            index_eligibility_source(obj.pk, obj.title or "", full)
+        if obj.is_active:
+            # Pass file_path so index_eligibility_source can use LangChain loaders
+            # even when extracted_text / manual_text are both empty (e.g. scanned PDF).
+            file_path = obj.file.path if obj.file else None
+            index_eligibility_source(obj.pk, obj.title or "", full, file_path=file_path)
             EligibilityKnowledgeSource.objects.filter(pk=obj.pk).update(last_indexed_at=timezone.now())
         else:
             delete_eligibility_source_index(obj.pk)

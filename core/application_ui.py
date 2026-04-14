@@ -46,7 +46,8 @@ def application_pipeline_progress_percent(application: LoanApplication) -> int:
     if st in (LoanApplicationStatus.VALIDATED, LoanApplicationStatus.REJECTED):
         return 100
 
-    n_doc = application.documents.count()
+    # Use len() to leverage Django's prefetch_related cache when available
+    n_doc = len(application.documents.all())
 
     p = 15
     if application.has_complete_financial_profile():

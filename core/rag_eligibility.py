@@ -66,13 +66,37 @@ def _pdf_text_libraries_available() -> bool:
 
 
 def _extract_pdf_text(path: Path) -> str:
-    """Try pypdf first, then PyPDF2 (same API). Returns empty string on failure."""
+    """
+    Extract text from a PDF file.
+
+    Attempt order (LangChain RAG pattern — most robust first):
+      1. PyMuPDF (fitz) — handles complex layouts, embedded fonts, most PDF types
+      2. pypdf / PyPDF2 — lightweight fallback for simple text-based PDFs
+    """
+    # 1. PyMuPDF (fitz) — pymupdf is in requirements.txt, always available
+    try:
+        import fitz  # pymupdf
+        doc = fitz.open(str(path))
+        parts: list[str] = []
+        for page in doc:
+            parts.append(page.get_text())
+        text = "\n".join(parts).strip()
+        if text:
+            return text
+        logger.info(
+            "PyMuPDF returned no text for %s — likely a scanned PDF with no embedded text layer.",
+            path.name,
+        )
+    except Exception as e:
+        logger.debug("fitz PDF extract failed (%s): %s", path.name, e)
+
+    # 2. pypdf / PyPDF2 fallback
     for module_name, reader_name in (("pypdf", "PdfReader"), ("PyPDF2", "PdfReader")):
         try:
             mod = __import__(module_name, fromlist=[reader_name])
             Reader = getattr(mod, reader_name)
             reader = Reader(str(path))
-            parts: list[str] = []
+            parts = []
             for page in reader.pages:
                 parts.append(page.extract_text() or "")
             text = "\n".join(parts).strip()
@@ -118,6 +142,74 @@ def extract_text_from_file(file_path: str | Path) -> str:
             logger.warning("Image OCR failed: %s", e)
             return ""
     return ""
+
+
+def _load_langchain_documents(path: Path, metadata: dict | None = None) -> list:
+    """
+    LangChain RAG "Load" step — returns list[Document] with page-level metadata.
+
+    Priority (best → fallback):
+      1. PyMuPDFLoader  (langchain_community + fitz)  — page metadata, best fidelity
+      2. PyPDFLoader    (langchain_community + pypdf)  — simpler but reliable
+      3. TextLoader     (langchain_community)          — plain text / markdown
+      4. extract_text_from_file → wrapped in a single Document
+    """
+    suf = path.suffix.lower()
+
+    if suf == ".pdf":
+        # 1. PyMuPDFLoader
+        try:
+            from langchain_community.document_loaders import PyMuPDFLoader
+            docs = PyMuPDFLoader(str(path)).load()
+            if docs and any((d.page_content or "").strip() for d in docs):
+                _apply_metadata(docs, metadata)
+                return docs
+        except Exception as e:
+            logger.debug("PyMuPDFLoader failed (%s): %s", path.name, e)
+
+        # 2. PyPDFLoader
+        try:
+            from langchain_community.document_loaders import PyPDFLoader
+            docs = PyPDFLoader(str(path)).load()
+            if docs and any((d.page_content or "").strip() for d in docs):
+                _apply_metadata(docs, metadata)
+                return docs
+        except Exception as e:
+            logger.debug("PyPDFLoader failed (%s): %s", path.name, e)
+
+    elif suf in (".txt", ".md"):
+        # 3. TextLoader
+        try:
+            from langchain_community.document_loaders import TextLoader
+            docs = TextLoader(str(path), encoding="utf-8").load()
+            if docs and any((d.page_content or "").strip() for d in docs):
+                _apply_metadata(docs, metadata)
+                return docs
+        except Exception as e:
+            logger.debug("TextLoader failed (%s): %s", path.name, e)
+
+    # 4. Last resort: custom extractor → single Document
+    text = extract_text_from_file(path)
+    if text:
+        from langchain_core.documents import Document as _Document
+        doc = _Document(page_content=text, metadata={"source": str(path)})
+        _apply_metadata([doc], metadata)
+        return [doc]
+
+    logger.warning(
+        "No text could be extracted from %s. "
+        "For scanned PDFs add manual text in the admin panel.",
+        path.name,
+    )
+    return []
+
+
+def _apply_metadata(docs: list, extra: dict | None) -> None:
+    """Merge extra metadata dict into each Document's metadata in-place."""
+    if not extra:
+        return
+    for d in docs:
+        d.metadata.update(extra)
 
 
 def _sanitize_dir_name(s: str) -> str:
@@ -184,10 +276,21 @@ def _delete_source_chunks(vector_store: Any, source_id: int) -> None:
         logger.warning("Chroma delete(where=) failed for source %s: %s", source_id, e)
 
 
-def index_eligibility_source(source_id: int, title: str, full_text: str) -> None:
+def index_eligibility_source(
+    source_id: int,
+    title: str,
+    full_text: str,
+    *,
+    file_path: str | None = None,
+) -> None:
     """
-    Indexe un texte politique : 1 Document LangChain → découpe → add_documents dans Chroma.
-    (Équivalent à load → split → vector_store.add_documents dans le tutoriel RAG.)
+    LangChain RAG indexing pipeline: Load → Split → Store.
+
+    - If ``full_text`` is provided it is used directly (already loaded from DB).
+    - If ``full_text`` is empty but ``file_path`` is given, the file is loaded with
+      LangChain document loaders (PyMuPDFLoader → PyPDFLoader → TextLoader → custom),
+      split with RecursiveCharacterTextSplitter, and added to Chroma — exactly the
+      pattern described in https://docs.langchain.com/oss/python/langchain/rag.
     """
     if not _openai_vector_rag_ready():
         logger.warning(
@@ -195,23 +298,51 @@ def index_eligibility_source(source_id: int, title: str, full_text: str) -> None
         )
         return
 
-    text = (full_text or "").strip()
     vs = _get_vector_store()
     _delete_source_chunks(vs, source_id)
 
+    meta = {"source_id": str(source_id), "title": (title or "")[:500]}
+    text = (full_text or "").strip()
+
+    # ── LangChain Load step: use document loaders when text not available ──────
+    if not text and file_path:
+        docs = _load_langchain_documents(Path(file_path), metadata=meta)
+        if not docs:
+            logger.warning(
+                "index_eligibility_source [%s]: no documents loaded from %s",
+                source_id,
+                file_path,
+            )
+            return
+        # Split (RecursiveCharacterTextSplitter) + Store (Chroma.add_documents)
+        splits = _text_splitter().split_documents(docs)
+        if splits:
+            try:
+                vs.add_documents(splits)
+                logger.info(
+                    "Indexed source [%s] via file loader: %d splits from %s",
+                    source_id,
+                    len(splits),
+                    Path(file_path).name,
+                )
+            except Exception as e:
+                logger.warning("vector_store.add_documents (file path) failed: %s", e)
+        return
+
+    # ── Standard path: full_text already available ────────────────────────────
     if not text:
         return
 
     from langchain_core.documents import Document as _Document
-    doc = _Document(
-        page_content=text,
-        metadata={"source_id": str(source_id), "title": (title or "")[:500]},
-    )
+    doc = _Document(page_content=text, metadata=meta)
     splits = _text_splitter().split_documents([doc])
     if not splits:
         return
     try:
         vs.add_documents(splits)
+        logger.info(
+            "Indexed source [%s] via full_text: %d splits.", source_id, len(splits)
+        )
     except Exception as e:
         logger.warning("vector_store.add_documents failed: %s", e)
 
@@ -243,6 +374,12 @@ def get_all_active_knowledge_text(max_chars: int | None = None) -> dict[str, Any
 
     for src in sources:
         blob = src.searchable_blob()
+        # Disk-read fallback: if DB fields are empty, read directly from file
+        if not (blob or "").strip() and src.file:
+            try:
+                blob = extract_text_from_file(src.file.path) or ""
+            except Exception:
+                blob = ""
         if not (blob or "").strip():
             continue
         title = (src.title or f"source_{src.pk}")[:200]
@@ -299,6 +436,12 @@ def retrieve_rule_chunks(query: str, loan_type: str, k: int = 6) -> list[str]:
     terms = set(re.split(r"\W+", q.lower())) - {"", "le", "la", "les", "de", "et", "ou"}
     for src in active:
         blob = src.searchable_blob()
+        # Disk-read fallback: if DB fields are empty, read directly from file
+        if not (blob or "").strip() and src.file:
+            try:
+                blob = extract_text_from_file(src.file.path) or ""
+            except Exception:
+                blob = ""
         for para in re.split(r"\n\s*\n+", blob):
             p = para.strip()
             if len(p) < 40:
@@ -418,7 +561,18 @@ def get_eligibility_guidance_from_rag(
     summary_fr, summary_en, chunks_used (int), policy_truncated (bool when full corpus used).
 
     Priorité : **texte complet** des sources actives pour le LLM ; repli ``similarity_search`` + mots-clés.
+    Results are cached for 10 minutes to avoid repeated OpenAI calls on every page load.
+    Cache is bypassed when `preloaded_policy_bundle` is provided (orchestration pipeline).
     """
+    from django.core.cache import cache
+
+    # Only cache when using the default bundle (no preloaded override)
+    cache_key = f"rag_guidance:{loan_type or 'personal'}:{(language or 'fr')[:2]}"
+    if preloaded_policy_bundle is None:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     loan_label = loan_type or "personal"
     q = (
         "règles d'éligibilité montant minimum maximum durée de remboursement mois prêt"
@@ -438,11 +592,16 @@ def get_eligibility_guidance_from_rag(
         structured["chunks_used"] = int(bundle.get("sources_with_text") or 0) or 1
         structured["policy_truncated"] = bool(bundle.get("truncated"))
         structured["policy_chars"] = len(full_text)
+        if preloaded_policy_bundle is None:
+            cache.set(cache_key, structured, timeout=600)
         return structured
 
     chunks = retrieve_rule_chunks(q, loan_label, k=24)
     if not chunks:
-        return {"available": False, "reason": "no_knowledge_sources"}
+        result: dict[str, Any] = {"available": False, "reason": "no_knowledge_sources"}
+        if preloaded_policy_bundle is None:
+            cache.set(cache_key, result, timeout=600)
+        return result
 
     structured = _llm_extract_rules(chunks, language, policy_text=None)
     if not structured:
@@ -451,4 +610,6 @@ def get_eligibility_guidance_from_rag(
     structured["available"] = True
     structured["chunks_used"] = len(chunks)
     structured["policy_truncated"] = False
+    if preloaded_policy_bundle is None:
+        cache.set(cache_key, structured, timeout=600)
     return structured

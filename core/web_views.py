@@ -23,12 +23,11 @@ from core.document_requirement_service import (
     document_counts_by_requirement_code,
     label_for,
     requirements_for_application,
-    seed_default_requirements,
 )
 from core.models import Currency, Language, LoanApplication, LoanType
+from core.lang_utils import resolve_language
 from core.portal import can_access_all_applications, get_loan_application_for_portal, is_backoffice_user
 from core.countries_data import country_display_name
-from core.rag_eligibility import get_eligibility_guidance_from_rag
 
 
 def home(request: HttpRequest) -> HttpResponse:
@@ -120,7 +119,6 @@ def logout_view(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
-    seed_default_requirements()
     if is_backoffice_user(request.user) or request.user.is_staff:
         return redirect("backoffice_dashboard")
     apps = LoanApplication.objects.filter(user=request.user)[:50]
@@ -137,7 +135,6 @@ def backoffice_dashboard(request: HttpRequest) -> HttpResponse:
     if not is_backoffice_user(request.user) and not request.user.is_superuser:
         messages.error(request, _("You do not have access to the backoffice."))
         return redirect("dashboard")
-    seed_default_requirements()
     apps = LoanApplication.objects.select_related("user").order_by("-created_at")[:200]
     return render(
         request,
@@ -148,17 +145,11 @@ def backoffice_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    seed_default_requirements()
     app = get_loan_application_for_portal(request.user, pk)
     if not app:
         messages.error(request, _("Application not found."))
         return redirect("backoffice_dashboard" if can_access_all_applications(request.user) else "dashboard")
-    lang = getattr(request.user, "preferred_language", None) or "fr"
-    rag_guidance = get_eligibility_guidance_from_rag(app.loan_type or "personal", lang)
-    if lang.startswith("fr"):
-        rag_summary = (rag_guidance.get("summary_fr") or rag_guidance.get("summary_en") or "").strip()
-    else:
-        rag_summary = (rag_guidance.get("summary_en") or rag_guidance.get("summary_fr") or "").strip()
+    lang = resolve_language(request, request.user, app)
 
     counts = document_counts_by_requirement_code(app)
     matrix_slots: list[dict] = []
@@ -185,7 +176,6 @@ def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
     # True once the AI pipeline has been run at least once
     has_been_analyzed = bool(app.eligibility_score is not None or roi)
-    app_documents = list(app.documents.all().order_by("id"))
 
     ctx = {
         "application": app,
@@ -199,14 +189,11 @@ def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "lw_portal_backoffice": app.user_id != request.user.id and can_access_all_applications(request.user),
         "lw_applicant_email": app.user.email if app.user_id else "",
         "lw_initial_progress": application_pipeline_progress_percent(app),
-        "lw_rag_eligibility": rag_guidance,
-        "lw_rag_summary": rag_summary,
         "lw_eligibility_detail": roi.get("eligibility_detail"),
         "lw_detail_lang": lang,
         "lw_analysis_rows": analysis_rows_for_template(app),
         "matrix_script_data": matrix_script_data,
         "lw_payslip_income_display": income_display_for_payslip_estimate(cust, app),
         "lw_has_been_analyzed": has_been_analyzed,
-        "lw_app_documents": app_documents,
     }
     return render(request, "loanwise/application_detail.html", ctx)

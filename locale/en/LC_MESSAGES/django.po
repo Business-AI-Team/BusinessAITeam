@@ -651,3 +651,131 @@ msgstr "File not found."
 
 msgid "A message is required."
 msgstr "A message is required."
+
+msgid "Votre demande de prêt simplifiée"
+msgstr "Your simplified loan application"
+
+msgid "Obtenez une réponse rapide sur votre éligibilité"
+msgstr "Get a fast answer on your eligibility"
+
+msgid ""
+"Déposez votre dossier en ligne, téléchargez vos documents et laissez notre "
+"assistant IA analyser votre demande de prêt — en toute sécurité et en "
+"quelques minutes."
+msgstr ""
+"Submit your application online, upload your documents and let our AI "
+"assistant analyse your loan request — securely, in just a few minutes."
+
+msgid "Accéder à mon espace"
+msgstr "Go to my space"
+
+msgid "Analyse rapide"
+msgstr "Fast analysis"
+
+msgid "Assistant IA"
+msgstr "AI assistant"
+
+msgid "Sécurisé"
+msgstr "Secure"
+
+msgid "Comment ça marche ?"
+msgstr "How does it work?"
+
+msgid "3 étapes simples pour connaître votre éligibilité"
+msgstr "3 simple steps to check your eligibility"
+
+msgid "Créez votre dossier"
+msgstr "Create your application"
+
+msgid ""
+"Renseignez vos informations personnelles, le montant souhaité et la durée "
+"de remboursement."
+msgstr ""
+"Enter your personal details, the requested amount and the repayment period."
+
+msgid "Téléchargez vos documents"
+msgstr "Upload your documents"
+
+msgid ""
+"Pièce d'identité, justificatif de domicile, bulletins de salaire — notre IA"
+" les analyse automatiquement."
+msgstr ""
+"ID document, proof of address, pay slips — our AI analyses them "
+"automatically."
+
+msgid "Recevez votre résultat"
+msgstr "Receive your result"
+
+msgid ""
+"Obtenez un score d'éligibilité clair et posez vos questions à notre "
+"assistant IA à tout moment."
+msgstr ""
+"Get a clear eligibility score and ask our AI assistant any questions at any "
+"time."
+
+msgid "Open assistant"
+msgstr "Open assistant"
+
+msgid "LoanWise assistant"
+msgstr "LoanWise assistant"
+
+msgid "Ask why a decision was made or how to improve your application."
+msgstr "Ask why a decision was made or how to improve your application."
+
+msgid "Your question… (Enter to send)"
+msgstr "Your question… (Enter to send)"
+
+msgid "Enter ↵ to send · Shift+Enter for new line"
+msgstr "Enter ↵ to send · Shift+Enter for new line"
+
+msgid "Hello! How can I help you with your loan application?"
+msgstr "Hello! How can I help you with your loan application?"
+
+msgid "Typing…"
+msgstr "Typing…"
+
+msgid "Network error. Please try again."
+msgstr "Network error. Please try again."
+
+msgid "Track eligibility, documents, and pipeline progress."
+msgstr "Track eligibility, documents, and pipeline progress."
+
+msgid "Evaluation detail"
+msgstr "Evaluation detail"
+
+msgid "Combines computed score, financial ratios, policy excerpts (RAG), and cross-checks declared figures against amounts and addresses read on your uploads."
+msgstr "Combines computed score, financial ratios, policy excerpts (RAG), and cross-checks declared figures against amounts and addresses read on your uploads."
+
+msgid "Declared vs documents"
+msgstr "Declared vs documents"
+
+#, python-format
+msgid "Score adjustment (consistency): −%(p)s points."
+msgstr "Score adjustment (consistency): −%(p)s points."
+
+msgid "Threshold"
+msgstr "Threshold"
+
+msgid "Decision"
+msgstr "Decision"
+
+msgid "Eligible (indicative)"
+msgstr "Eligible (indicative)"
+
+msgid "Not eligible (indicative)"
+msgstr "Not eligible (indicative)"
+
+msgid "OpenAI synthesis (LangChain)"
+msgstr "OpenAI synthesis (LangChain)"
+
+msgid "Indicative decision from the written policy documents and uploaded file analyses (no separate form fields sent to the model)."
+msgstr "Indicative decision from the written policy documents and uploaded file analyses (no separate form fields sent to the model)."
+
+msgid "Policy excerpts (RAG)"
+msgstr "Policy excerpts (RAG)"
+
+msgid "OpenAI synthesis unavailable."
+msgstr "OpenAI synthesis unavailable."
+
+msgid "Action required: document inconsistency"
+msgstr "Action required: document inconsistency"

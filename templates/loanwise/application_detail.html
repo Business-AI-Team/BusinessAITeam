@@ -49,50 +49,53 @@
     </div>
   </div>
 
-  {% if lw_rag_eligibility.available %}
-  <div class="animate-fade-in-up rounded-2xl border border-emerald-200/80 bg-emerald-50/90 p-5 dark:border-emerald-800/60 dark:bg-emerald-950/35">
-    <h2 class="text-lg font-semibold text-emerald-950 dark:text-emerald-100">{% trans "Indicative eligibility (from policy documents)" %}</h2>
-    <p class="mt-1 text-xs text-emerald-800/90 dark:text-emerald-200/80">
-      {% trans "Ranges below come from documents uploaded by your administrator. They are not a guarantee of approval." %}
-    </p>
-    <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-      <div>
-        <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Amount range" %}</dt>
-        <dd class="mt-0.5 font-semibold tabular-nums text-emerald-950 dark:text-emerald-50">
-          {% if lw_rag_eligibility.min_amount is not None and lw_rag_eligibility.max_amount is not None %}
-            {{ lw_rag_eligibility.min_amount|floatformat:0 }} – {{ lw_rag_eligibility.max_amount|floatformat:0 }} {{ lw_rag_eligibility.currency }}
-          {% else %}
-            —
-          {% endif %}
-        </dd>
+  {# RAG eligibility section — loaded asynchronously to avoid blocking page render #}
+  <div x-data="ragGuidance({{ application.id }})" x-init="load()">
+    <template x-if="loading">
+      <div class="animate-fade-in-up flex items-center gap-3 rounded-2xl border border-emerald-200/50 bg-emerald-50/60 p-5 text-sm text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/20 dark:text-emerald-300">
+        <svg class="h-4 w-4 animate-spin shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+        </svg>
+        {% trans "Loading eligibility guidance…" %}
       </div>
-      <div>
-        <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Repayment terms (months)" %}</dt>
-        <dd class="mt-0.5 font-semibold text-emerald-950 dark:text-emerald-50">
-          {% if lw_rag_eligibility.term_months_options %}
-            {{ lw_rag_eligibility.term_months_options|join:", " }}
-          {% else %}
-            —
-          {% endif %}
-        </dd>
+    </template>
+    <template x-if="!loading && available">
+      <div class="animate-fade-in-up rounded-2xl border border-emerald-200/80 bg-emerald-50/90 p-5 dark:border-emerald-800/60 dark:bg-emerald-950/35">
+        <h2 class="text-lg font-semibold text-emerald-950 dark:text-emerald-100">{% trans "Indicative eligibility (from policy documents)" %}</h2>
+        <p class="mt-1 text-xs text-emerald-800/90 dark:text-emerald-200/80">
+          {% trans "Ranges below come from documents uploaded by your administrator. They are not a guarantee of approval." %}
+        </p>
+        <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Amount range" %}</dt>
+            <dd class="mt-0.5 font-semibold tabular-nums text-emerald-950 dark:text-emerald-50">
+              <span x-text="minAmount !== null && maxAmount !== null ? (fmtNum(minAmount) + ' – ' + fmtNum(maxAmount) + ' ' + (currency || '')) : '—'"></span>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Repayment terms (months)" %}</dt>
+            <dd class="mt-0.5 font-semibold text-emerald-950 dark:text-emerald-50">
+              <span x-text="termMonths.length ? termMonths.join(', ') : '—'"></span>
+            </dd>
+          </div>
+        </dl>
+        <template x-if="summary">
+          <p class="mt-3 text-sm leading-relaxed text-emerald-900/90 dark:text-emerald-100/90" x-text="summary"></p>
+        </template>
       </div>
-    </dl>
-    {% if lw_rag_summary %}
-    <p class="mt-3 text-sm leading-relaxed text-emerald-900/90 dark:text-emerald-100/90">{{ lw_rag_summary }}</p>
-    {% endif %}
+    </template>
   </div>
-  {% endif %}
 
-  {% if not lw_portal_backoffice and lw_eligibility_detail and not lw_eligibility_detail.error and lw_eligibility_detail.address_blocker %}
+  {% if not lw_portal_backoffice and lw_eligibility_detail and not lw_eligibility_detail.error and lw_eligibility_detail.has_doc_issues %}
   <div class="animate-fade-in-up rounded-2xl border border-rose-300/90 bg-rose-50/95 p-4 text-sm text-rose-950 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-100">
-    <p class="font-semibold">{% trans "Action required: address or identity documents" %}</p>
-    <p class="mt-2 leading-relaxed">
-      {% if lw_detail_lang|slice:':2' == 'fr' %}
-      {{ lw_eligibility_detail.user_advice_fr }}
-      {% else %}
-      {{ lw_eligibility_detail.user_advice_en }}
-      {% endif %}
-    </p>
+    {% if lw_detail_lang|slice:':2' == 'fr' %}
+      <p class="font-semibold">{% if lw_eligibility_detail.user_advice_title_fr %}{{ lw_eligibility_detail.user_advice_title_fr }}{% else %}{% trans "Action required: document inconsistency" %}{% endif %}</p>
+      <p class="mt-2 leading-relaxed">{{ lw_eligibility_detail.user_advice_fr }}</p>
+    {% else %}
+      <p class="font-semibold">{% if lw_eligibility_detail.user_advice_title_en %}{{ lw_eligibility_detail.user_advice_title_en }}{% else %}{% trans "Action required: document inconsistency" %}{% endif %}</p>
+      <p class="mt-2 leading-relaxed">{{ lw_eligibility_detail.user_advice_en }}</p>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -280,46 +283,69 @@
     <div class="space-y-6">
 
       {% if lw_has_been_analyzed %}
-      {# ── Post-analyse : afficher les documents fournis (téléchargeables par backoffice) ── #}
-      <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
+      {# ── Post-analyse : documents fournis chargés de manière asynchrone ── #}
+      <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80"
+           x-data="appDocuments({{ application.id }})"
+           x-init="load()">
         <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents fournis" %}</h2>
         <p class="mt-1 text-xs text-slate-500">{% trans "Pièces justificatives déposées pour cette demande. Le backoffice peut les télécharger." %}</p>
 
-        {% if lw_app_documents %}
-        <ul class="mt-4 space-y-2">
-          {% for doc in lw_app_documents %}
-          <li class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
-            <div class="flex items-center gap-3 min-w-0">
-              <span class="text-xl flex-shrink-0">
-                {% if doc.kind == 'national_id' %}🪪
-                {% elif doc.kind == 'passport' %}🛂
-                {% elif doc.kind == 'proof_of_address' %}🏠
-                {% elif doc.kind == 'payslip' %}💼
-                {% elif doc.kind == 'bank_statement' %}🏦
-                {% elif doc.kind == 'business_plan' %}📊
-                {% elif doc.kind == 'tax_return' %}🧾
-                {% else %}📄{% endif %}
-              </span>
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ doc.original_filename }}</p>
-                <p class="text-xs text-slate-500">{{ doc.get_kind_display }} · {{ doc.file_size|filesizeformat }}</p>
-              </div>
-            </div>
-            {% if lw_portal_backoffice %}
-            <a href="/api/documents/{{ doc.pk }}/download/"
-               target="_blank"
-               class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-sky-400">
-              ⬇ {% trans "Télécharger" %}
-            </a>
-            {% else %}
-            <span class="flex-shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">✔ {% trans "Fourni" %}</span>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <p class="mt-4 text-sm text-slate-500">{% trans "Aucun document trouvé." %}</p>
-        {% endif %}
+        <!-- Loading state -->
+        <template x-if="loading">
+          <div class="mt-4 flex items-center gap-3 text-sm text-slate-400 dark:text-slate-500">
+            <svg class="h-4 w-4 animate-spin text-sky-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+            </svg>
+            {% trans "Chargement des documents…" %}
+          </div>
+        </template>
+
+        <!-- Error state -->
+        <template x-if="!loading && error">
+          <p class="mt-4 text-sm text-rose-500" x-text="error"></p>
+        </template>
+
+        <!-- Empty state -->
+        <template x-if="!loading && !error && documents.length === 0">
+          <p class="mt-4 text-sm text-slate-500">{% trans "Aucun document trouvé." %}</p>
+        </template>
+
+        <!-- Document list -->
+        <template x-if="!loading && !error && documents.length > 0">
+          <ul class="mt-4 space-y-2">
+            <template x-for="doc in documents" :key="doc.id">
+              <li class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+                <div class="flex items-center gap-3 min-w-0">
+                  <span class="text-xl flex-shrink-0" x-text="kindIcon(doc.kind)"></span>
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-medium text-slate-800 dark:text-slate-100" x-text="doc.original_filename"></p>
+                    <p class="text-xs text-slate-500" x-text="doc.kind_display + ' · ' + fmtSize(doc.file_size)"></p>
+                  </div>
+                </div>
+                <template x-if="doc.download_url">
+                  <a :href="doc.download_url" target="_blank"
+                     class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-sky-400">
+                    ⬇ {% trans "Télécharger" %}
+                  </a>
+                </template>
+                <template x-if="!doc.download_url">
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">✔ {% trans "Fourni" %}</span>
+                    <button type="button"
+                            class="rounded-full p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition"
+                            :title="'{% filter escapejs %}{% trans "Supprimer ce fichier" %}{% endfilter %}'"
+                            @click="removeDoc(doc.id)">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                      </svg>
+                    </button>
+                  </div>
+                </template>
+              </li>
+            </template>
+          </ul>
+        </template>
       </div>
 
       {% else %}
@@ -337,9 +363,17 @@
   </div>
 
   <div class="animate-fade-in-up flex flex-wrap justify-end gap-3 pt-2">
-    <a :href="'/api/applications/' + appId + '/export_pdf/'" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+    {% if lw_has_been_analyzed %}
+    <a :href="'/api/applications/' + appId + '/export_pdf/'"
+       class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
       {% trans "Download PDF" %}
     </a>
+    {% else %}
+    <span title="{% trans "Lancez d'abord l'analyse d'éligibilité pour générer le rapport PDF." %}"
+          class="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-600">
+      {% trans "Download PDF" %}
+    </span>
+    {% endif %}
     {% if not lw_has_been_analyzed %}
     <button type="button" @click="runOrchestrator()"
             class="rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:from-sky-500 hover:to-indigo-500 disabled:opacity-50"
@@ -355,6 +389,93 @@
 {% block extra_js %}
 <script src="{% static 'js/loanwise_file_upload.js' %}"></script>
 <script>
+  function ragGuidance(appId) {
+    return {
+      appId,
+      loading: true,
+      available: false,
+      currency: null,
+      minAmount: null,
+      maxAmount: null,
+      termMonths: [],
+      summary: '',
+      async load() {
+        try {
+          const res = await fetch('/api/applications/' + appId + '/rag_guidance/', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+          });
+          if (res.ok) {
+            const d = await res.json();
+            this.available = !!d.available;
+            this.currency = d.currency || null;
+            this.minAmount = d.min_amount != null ? Number(d.min_amount) : null;
+            this.maxAmount = d.max_amount != null ? Number(d.max_amount) : null;
+            this.termMonths = d.term_months_options || [];
+            this.summary = d.summary || '';
+          }
+        } catch (e) {}
+        finally { this.loading = false; }
+      },
+      fmtNum(n) {
+        if (n == null) return '—';
+        return Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+      },
+    };
+  }
+
+  function appDocuments(appId) {
+    return {
+      appId,
+      loading: true,
+      error: null,
+      documents: [],
+      getCookie(name) {
+        const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return v ? decodeURIComponent(v[2]) : '';
+      },
+      async load() {
+        try {
+          const res = await fetch('/api/applications/' + appId + '/documents/', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+          });
+          if (!res.ok) { this.error = 'HTTP ' + res.status; return; }
+          const data = await res.json();
+          this.documents = data.documents || [];
+        } catch (e) {
+          this.error = '{% filter escapejs %}{% trans "Erreur lors du chargement des documents." %}{% endfilter %}';
+        } finally {
+          this.loading = false;
+        }
+      },
+      async removeDoc(docId) {
+        try {
+          const res = await fetch('/api/documents/' + docId + '/', {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': this.getCookie('csrftoken') },
+          });
+          if (res.ok || res.status === 204) {
+            this.documents = this.documents.filter(d => d.id !== docId);
+          }
+        } catch (e) {}
+      },
+      kindIcon(kind) {
+        const icons = { national_id: '🪪', passport: '🛂', proof_of_address: '🏠', payslip: '💼', bank_statement: '🏦', tax_return: '🧾' };
+        return icons[kind] || '📄';
+      },
+      fmtSize(bytes) {
+        if (!bytes) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        let n = bytes;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return n.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+      },
+    };
+  }
+
   function appWorkspace(appId, opts) {
     opts = opts || {};
     var ip = typeof opts.initialProgress === 'number' ? opts.initialProgress : 15;

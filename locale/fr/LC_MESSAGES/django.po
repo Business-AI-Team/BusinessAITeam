@@ -674,3 +674,70 @@ msgstr "Fichier introuvable."
 
 msgid "A message is required."
 msgstr "Un message est requis."
+
+msgid "Open assistant"
+msgstr "Ouvrir l'assistant"
+
+msgid "LoanWise assistant"
+msgstr "Assistant LoanWise"
+
+msgid "Ask why a decision was made or how to improve your application."
+msgstr "Demandez pourquoi une décision a été prise ou comment améliorer votre dossier."
+
+msgid "Your question… (Enter to send)"
+msgstr "Votre question… (Entrée pour envoyer)"
+
+msgid "Enter ↵ to send · Shift+Enter for new line"
+msgstr "Entrée ↵ pour envoyer · Maj+Entrée pour saut de ligne"
+
+msgid "Hello! How can I help you with your loan application?"
+msgstr "Bonjour ! Comment puis-je vous aider avec votre demande de prêt ?"
+
+msgid "Typing…"
+msgstr "En train d'écrire…"
+
+msgid "Network error. Please try again."
+msgstr "Erreur réseau. Veuillez réessayer."
+
+msgid "Track eligibility, documents, and pipeline progress."
+msgstr "Suivez l'éligibilité, les documents et la progression du pipeline."
+
+msgid "Evaluation detail"
+msgstr "Détail de l'évaluation"
+
+msgid "Combines computed score, financial ratios, policy excerpts (RAG), and cross-checks declared figures against amounts and addresses read on your uploads."
+msgstr "Combine le score calculé, les ratios financiers, les extraits de politique (RAG), et vérifie les données déclarées par rapport aux montants et adresses lus sur les pièces téléversées."
+
+msgid "Declared vs documents"
+msgstr "Déclaré vs documents"
+
+#, python-format
+msgid "Score adjustment (consistency): −%(p)s points."
+msgstr "Ajustement du score (cohérence) : −%(p)s points."
+
+msgid "Threshold"
+msgstr "Seuil"
+
+msgid "Decision"
+msgstr "Décision"
+
+msgid "Eligible (indicative)"
+msgstr "Éligible (indicatif)"
+
+msgid "Not eligible (indicative)"
+msgstr "Non éligible (indicatif)"
+
+msgid "OpenAI synthesis (LangChain)"
+msgstr "Synthèse OpenAI (LangChain)"
+
+msgid "Indicative decision from the written policy documents and uploaded file analyses (no separate form fields sent to the model)."
+msgstr "Décision indicative issue des documents de politique écrits et des analyses de fichiers téléversés (aucun champ de formulaire séparé envoyé au modèle)."
+
+msgid "Policy excerpts (RAG)"
+msgstr "Extraits de politique (RAG)"
+
+msgid "OpenAI synthesis unavailable."
+msgstr "Synthèse OpenAI indisponible."
+
+msgid "Action required: document inconsistency"
+msgstr "Action requise : incohérence dans les documents"

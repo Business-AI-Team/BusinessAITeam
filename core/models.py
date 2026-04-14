@@ -306,16 +306,22 @@ class LoanApplication(models.Model):
 
     @property
     def effective_annual_income(self) -> Decimal:
-        """Revenu annuel : profil ou dossier si renseigné, sinon meilleure estimation issue des bulletins analysés."""
+        """Revenu annuel : profil ou dossier si renseigné, sinon meilleure estimation issue des bulletins analysés.
+        Result is cached on the instance to avoid repeated document queries within the same request."""
+        if hasattr(self, "_eff_income_cache"):
+            return self._eff_income_cache  # type: ignore[return-value]
         c = getattr(self, "customer", None)
         if c is not None and c.annual_income is not None and c.annual_income > 0:
-            return c.annual_income
-        if self.annual_income is not None and self.annual_income > 0:
-            return self.annual_income
-        from core.document_consistency import best_annual_income_from_payslips
+            result: Decimal = c.annual_income
+        elif self.annual_income is not None and self.annual_income > 0:
+            result = self.annual_income
+        else:
+            from core.document_consistency import best_annual_income_from_payslips
 
-        est = best_annual_income_from_payslips(self)
-        return est if est and est > 0 else Decimal("0")
+            est = best_annual_income_from_payslips(self)
+            result = est if est and est > 0 else Decimal("0")
+        self._eff_income_cache = result  # type: ignore[attr-defined]
+        return result
 
     def has_complete_financial_profile(self) -> bool:
         """Declared income and loan amount are set (> 0) so the deterministic score is meaningful."""

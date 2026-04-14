@@ -21,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.document_requirement_service import label_for, seed_default_requirements
+from core.lang_utils import resolve_language
 from core.loan_orchestrator_agent import run_orchestration
 from core.portal import can_access_all_applications
 from core.models import (
@@ -323,11 +324,39 @@ class DocumentDownloadView(APIView):
         return response
 
 
+class DocumentDeleteView(APIView):
+    """Owner or backoffice: delete an uploaded document (before validation)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, document_id: int):
+        doc = get_object_or_404(ApplicationDocument, pk=document_id)
+        app = doc.application
+        if app.user_id != request.user.id and not can_access_all_applications(request.user):
+            return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
+        # Only truly terminal statuses block deletion. VALIDATED/REJECTED still allow
+        # the owner to replace documents and re-run the analysis.
+        locked_statuses = {LoanApplicationStatus.CLOSED, LoanApplicationStatus.CANCELED}
+        if app.status in locked_statuses:
+            return Response(
+                {"detail": _("This application is closed and its documents cannot be modified.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from django.core.files.storage import default_storage
+
+        if doc.storage_path:
+            try:
+                default_storage.delete(doc.storage_path)
+            except Exception:
+                pass
+        doc.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class DocumentRequirementListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        seed_default_requirements()
         lang = request.query_params.get("lang") or getattr(request.user, "preferred_language", "fr")
         qs = DocumentRequirement.objects.filter(active=True).order_by("sort_order")
         ser = DocumentRequirementSerializer(qs, many=True, context={"language": lang})
@@ -349,8 +378,10 @@ class AssistantChatView(APIView):
             app = get_object_or_404(LoanApplication, pk=int(raw_id))
             if app.user_id != request.user.id and not can_access_all_applications(request.user):
                 return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
-        lang = getattr(request.user, "preferred_language", "fr") or "fr"
+        lang = resolve_language(request, request.user, app)
         page_context = (request.data.get("page_context") or "home").strip()
+        raw_history = request.data.get("history")
+        history = raw_history if isinstance(raw_history, list) else []
         if request.user.is_staff or request.user.is_superuser:
             actor_role = "admin"
         elif can_access_all_applications(request.user):
@@ -361,13 +392,73 @@ class AssistantChatView(APIView):
             user_message=msg,
             language=str(lang),
             user_email=request.user.email,
+            actor_user=request.user,
             application=app,
             actor_role=actor_role,
             page_context=page_context,
+            history=history,
         )
         if out.get("error"):
             return Response(out, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response(out)
+
+
+class ApplicationRagGuidanceView(APIView):
+    """Return RAG-based eligibility guidance for an application (async load)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk: int):
+        app = get_object_or_404(LoanApplication, pk=pk)
+        if app.user_id != request.user.id and not can_access_all_applications(request.user):
+            return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
+
+        from core.rag_eligibility import get_eligibility_guidance_from_rag
+
+        lang = resolve_language(request, request.user, app)
+        guidance = get_eligibility_guidance_from_rag(app.loan_type or "personal", lang)
+        if lang.startswith("fr"):
+            summary = (guidance.get("summary_fr") or guidance.get("summary_en") or "").strip()
+        else:
+            summary = (guidance.get("summary_en") or guidance.get("summary_fr") or "").strip()
+
+        return Response({
+            "available": guidance.get("available", False),
+            "currency": guidance.get("currency"),
+            "min_amount": guidance.get("min_amount"),
+            "max_amount": guidance.get("max_amount"),
+            "term_months_options": guidance.get("term_months_options") or [],
+            "summary": summary,
+        })
+
+
+class ApplicationDocumentsView(APIView):
+    """Return the list of uploaded documents for an application (async load)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk: int):
+        app = get_object_or_404(LoanApplication, pk=pk)
+        if app.user_id != request.user.id and not can_access_all_applications(request.user):
+            return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
+
+        can_download = can_access_all_applications(request.user)
+        docs = app.documents.all().order_by("id")
+        results = []
+        for doc in docs:
+            results.append(
+                {
+                    "id": doc.pk,
+                    "kind": doc.kind,
+                    "kind_display": doc.get_kind_display(),
+                    "original_filename": doc.original_filename,
+                    "file_size": doc.file_size or 0,
+                    "requirement_id": doc.requirement_id,
+                    # download_url is always provided; the frontend shows the button only for backoffice/admin
+                    "download_url": f"/api/documents/{doc.pk}/download/" if can_download else None,
+                }
+            )
+        return Response({"documents": results, "can_download": can_download})
 
 
 class HealthView(APIView):

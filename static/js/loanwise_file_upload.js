@@ -87,6 +87,7 @@ function loanwiseFileUpload(opts) {
 
 /**
  * Required documents matrix: each slot has files_needed (e.g. 3 payslips).
+ * Supports multi-file drag & drop, per-slot file list, and individual delete.
  * Payload: JSON script tag id → { slots: [{ requirement_id, label, description, files_needed, doc_kind, uploaded }] }.
  */
 function loanwiseFileUploadMatrix(opts) {
@@ -96,44 +97,97 @@ function loanwiseFileUploadMatrix(opts) {
     appId,
     scriptId,
     slots: [],
+    /* requirement_id → [{id, name}] — tracks uploaded files per slot */
+    uploadedFiles: {},
     acceptTypes: ".pdf,.png,.jpg,.jpeg,.webp,image/*,application/pdf",
     uploadingId: null,
     errorId: null,
     lastError: "",
     dragOverId: null,
+    _queueRunning: false,
+    _queue: [],
     getCsrf() {
       const el = document.querySelector("[name=csrfmiddlewaretoken]");
       return el ? el.value : "";
     },
-    init() {
+
+    /* ── init: load slots + fetch existing uploaded docs ── */
+    async init() {
       const el = document.getElementById(this.scriptId);
       let data = { slots: [] };
-      try {
-        data = el ? JSON.parse(el.textContent) : { slots: [] };
-      } catch (e) {
-        data = { slots: [] };
-      }
+      try { data = el ? JSON.parse(el.textContent) : { slots: [] }; } catch (e) {}
       this.slots = (data.slots || []).map((s) => ({
         ...s,
         uploaded: typeof s.uploaded === "number" ? s.uploaded : 0,
         files_needed: Math.max(1, parseInt(s.files_needed, 10) || 1),
       }));
+
+      /* Load existing documents from API to populate file lists */
+      try {
+        const res = await fetch("/api/applications/" + this.appId + "/documents/", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+        if (res.ok) {
+          const payload = await res.json();
+          const uf = {};
+          for (const doc of (payload.documents || [])) {
+            const rid = doc.requirement_id;
+            if (rid == null) continue;
+            if (!uf[rid]) uf[rid] = [];
+            uf[rid].push({ id: doc.id, name: doc.original_filename });
+          }
+          this.uploadedFiles = uf;
+          /* Sync counters with server reality */
+          for (const slot of this.slots) {
+            const files = uf[slot.requirement_id] || [];
+            if (files.length > 0) slot.uploaded = files.length;
+          }
+        }
+      } catch (e) {}
     },
+
     openPicker(rid) {
       const inp = document.getElementById("fup-" + rid);
       if (inp) inp.click();
     },
+
+    /* ── File input (supports multiple attribute) ── */
     onFileInput(ev, slot) {
-      const f = ev.target.files && ev.target.files[0];
+      const files = ev.target.files ? Array.from(ev.target.files) : [];
       ev.target.value = "";
-      if (f) this.sendFile(f, slot);
+      if (files.length) this._enqueue(files, slot);
     },
+
+    /* ── Drag & drop (multiple files at once) ── */
     onDropSlot(ev, slot) {
       ev.preventDefault();
       this.dragOverId = null;
-      const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-      if (f) this.sendFile(f, slot);
+      const files = ev.dataTransfer && ev.dataTransfer.files
+        ? Array.from(ev.dataTransfer.files)
+        : [];
+      if (files.length) this._enqueue(files, slot);
     },
+
+    /* ── Queue helpers (sequential uploads, respect files_needed limit) ── */
+    _enqueue(files, slot) {
+      const remaining = slot.files_needed - slot.uploaded;
+      if (remaining <= 0) return;
+      files.slice(0, remaining).forEach((f) => this._queue.push({ file: f, slot }));
+      if (!this._queueRunning) this._processQueue();
+    },
+
+    async _processQueue() {
+      this._queueRunning = true;
+      while (this._queue.length > 0) {
+        const { file, slot } = this._queue.shift();
+        if (slot.uploaded >= slot.files_needed) continue;
+        await this.sendFile(file, slot);
+      }
+      this._queueRunning = false;
+    },
+
+    /* ── Upload a single file ── */
     async sendFile(file, slot) {
       if (!file || slot.uploaded >= slot.files_needed) return;
       this.errorId = null;
@@ -151,18 +205,16 @@ function loanwiseFileUploadMatrix(opts) {
           body: fd,
         });
         if (res.ok) {
+          const doc = await res.json();
           slot.uploaded += 1;
+          const rid = slot.requirement_id;
+          if (!this.uploadedFiles[rid]) this.uploadedFiles[rid] = [];
+          this.uploadedFiles[rid] = [...this.uploadedFiles[rid], { id: doc.id, name: doc.original_filename || file.name }];
           try {
-            window.dispatchEvent(
-              new CustomEvent("loanwise-file-uploaded", {
-                bubbles: true,
-                detail: {
-                  requirement_id: slot.requirement_id,
-                  uploaded: slot.uploaded,
-                  files_needed: slot.files_needed,
-                },
-              })
-            );
+            window.dispatchEvent(new CustomEvent("loanwise-file-uploaded", {
+              bubbles: true,
+              detail: { requirement_id: rid, uploaded: slot.uploaded, files_needed: slot.files_needed },
+            }));
           } catch (e) {}
         } else {
           this.errorId = slot.requirement_id;
@@ -174,6 +226,28 @@ function loanwiseFileUploadMatrix(opts) {
       } finally {
         this.uploadingId = null;
       }
+    },
+
+    /* ── Remove a file (DELETE API + update local state) ── */
+    async removeFile(docId, slot) {
+      try {
+        const res = await fetch("/api/documents/" + docId + "/", {
+          method: "DELETE",
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": this.getCsrf() },
+        });
+        if (res.ok || res.status === 204) {
+          const rid = slot.requirement_id;
+          this.uploadedFiles[rid] = (this.uploadedFiles[rid] || []).filter((f) => f.id !== docId);
+          slot.uploaded = Math.max(0, slot.uploaded - 1);
+          try {
+            window.dispatchEvent(new CustomEvent("loanwise-file-uploaded", {
+              bubbles: true,
+              detail: { requirement_id: rid, uploaded: slot.uploaded, files_needed: slot.files_needed },
+            }));
+          } catch (e) {}
+        }
+      } catch (e) {}
     },
   };
 }

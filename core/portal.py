@@ -31,7 +31,12 @@ def can_view_application(user, application: LoanApplication) -> bool:
 
 def get_loan_application_for_portal(user, pk: int) -> LoanApplication | None:
     """Return application if the user may open it (owner or backoffice/superuser)."""
-    app = LoanApplication.objects.filter(pk=pk).select_related("user", "customer").first()
+    app = (
+        LoanApplication.objects.filter(pk=pk)
+        .select_related("user", "customer")
+        .prefetch_related("documents__requirement")
+        .first()
+    )
     if not app:
         return None
     if can_view_application(user, app):

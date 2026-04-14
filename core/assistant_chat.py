@@ -2,10 +2,11 @@
 Assistant conversationnel (OpenAI) pour expliquer un dossier ou donner des pistes d'amélioration.
 
 Quatre sources de contexte injectées dans chaque échange :
-  SOURCE 0 — Guide d'utilisation (admin) : PDF/texte configuré par l'admin selon le rôle + la page courante
-  SOURCE 1 — Règles de l'institution (RAG) : chunks sémantiques depuis Chroma / PDF sur disque
-  SOURCE 2 — Profil utilisateur          : données du customer + demande de prêt + analyse d'éligibilité
-  SOURCE 3 — Documents fournis           : résumés des pièces justificatives uploadées
+  SOURCE 0  — Guide d'utilisation (admin) : PDF/texte configuré par l'admin selon le rôle + la page courante
+  SOURCE 1a — Politique complète de l'institution : corpus intégral des sources actives (EligibilityKnowledgeSource)
+  SOURCE 1b — Extraits pertinents (RAG) : top-k chunks sémantiques depuis Chroma pour la question posée
+  SOURCE 2  — Profil utilisateur : données du customer + demande de prêt + analyse d'éligibilité
+  SOURCE 3  — Documents fournis : résumés des pièces justificatives uploadées
 """
 
 from __future__ import annotations
@@ -132,37 +133,40 @@ def _load_guide_text(actor_role: str, page_context: str) -> str:
 
 # ── SOURCE 1 : règles RAG (institution) ───────────────────────────────────────
 
-def _build_rag_context(user_message: str, loan_type: str) -> str:
+def _build_policy_context(user_message: str, loan_type: str) -> str:
     """
-    Retrieval sémantique depuis Chroma (LangChain).
-    Fallback keyword → fallback lecture fichier sur disque si Chroma vide.
-    """
-    from core.models import EligibilityKnowledgeSource
-    from core.rag_eligibility import extract_text_from_file, retrieve_rule_chunks
+    Corpus complet de la politique institutionnelle (SOURCE 1a) + top-k chunks sémantiques
+    pertinents pour la question posée (SOURCE 1b).
 
-    # Niveau 1 : similarity search Chroma
+    SOURCE 1a garantit que l'assistant connaît l'intégralité des règles même si la question
+    n'est pas bien couverte par la recherche vectorielle.
+    SOURCE 1b oriente le LLM sur les passages les plus directement pertinents.
+    """
+    from core.rag_eligibility import get_all_active_knowledge_text, retrieve_rule_chunks
+
+    parts: list[str] = []
+
+    # SOURCE 1a : corpus intégral des sources actives
+    bundle = get_all_active_knowledge_text()
+    full_text = (bundle.get("text") or "").strip()
+    if full_text:
+        trunc_note = " [tronqué — voir LOANWISE_RAG_LLM_MAX_CHARS]" if bundle.get("truncated") else ""
+        parts.append(
+            f"[POLITIQUE COMPLÈTE DE L'INSTITUTION{trunc_note}]\n{full_text}"
+        )
+
+    # SOURCE 1b : extraits sémantiquement pertinents pour la question de l'utilisateur
     chunks = retrieve_rule_chunks(user_message, loan_type, k=5)
     if chunks:
-        return "\n\n".join(f"[extrait {i}]\n{c[:2000]}" for i, c in enumerate(chunks, 1))
-
-    # Niveau 2 & 3 : searchable_blob() ou lecture directe du fichier sur disque
-    rag_sources = EligibilityKnowledgeSource.objects.filter(is_active=True).order_by("id")
-    parts: list[str] = []
-    for src in rag_sources:
-        blob = (src.searchable_blob() or "").strip()
-        if not blob and src.file:
-            try:
-                blob = (extract_text_from_file(src.file.path) or "").strip()
-            except Exception:
-                blob = ""
-        if blob:
-            title = (src.title or f"source_{src.pk}")[:200]
-            parts.append(f"[{title}]\n{blob[:3000]}")
+        chunk_block = "\n\n".join(
+            f"[extrait pertinent {i}]\n{c[:2000]}" for i, c in enumerate(chunks, 1)
+        )
+        parts.append(f"[EXTRAITS PERTINENTS POUR LA QUESTION]\n{chunk_block}")
 
     return "\n\n".join(parts) if parts else "(aucune règle disponible)"
 
 
-# ── Point d'entrée principal ──────────────────────────────────────────────────
+# ── Bloc de rôle ──────────────────────────────────────────────────────────────
 
 def _build_role_instructions(
     actor_role: str,
@@ -177,80 +181,75 @@ def _build_role_instructions(
     if actor_role == "admin":
         if is_fr:
             return (
-                "Tu parles actuellement avec un ADMINISTRATEUR de l'application LoanWise (superutilisateur). "
+                "Tu parles actuellement avec un ADMINISTRATEUR de notre application LoanWise (superutilisateur). "
                 "Adopte un ton technique et direct. "
-                "Tu peux répondre à toutes les questions sur le système, les règles, les configurations, "
+                "Tu peux répondre à toutes les questions sur notre système, nos règles, nos configurations, "
                 "les données d'un dossier, les logs ou l'architecture. "
                 "N'omets aucun détail."
             )
         return (
-            "You are currently speaking with a LoanWise ADMINISTRATOR (superuser). "
+            "You are currently speaking with an ADMINISTRATOR of our LoanWise application (superuser). "
             "Be direct and technically precise. "
-            "Answer any questions about the system, rules, configurations, application data, logs, or architecture. "
+            "Answer any questions about our system, our rules, our configurations, application data, logs, or architecture. "
             "Omit nothing."
         )
     if actor_role == "backoffice":
         if is_fr:
             return (
-                "Tu parles actuellement avec un agent du BACKOFFICE (employé de l'institution bancaire). "
+                "Tu parles actuellement avec un agent du BACKOFFICE — un collègue de notre institution bancaire. "
                 f"Cet agent consulte le dossier du client « {customer_name} » dont il n'est PAS le propriétaire. "
                 "Adopte un ton professionnel et analytique. "
-                "Tu peux fournir des détails techniques complets (scores, ratios, incohérences de documents, règles internes). "
-                "Aide l'agent à comprendre pourquoi la demande a été acceptée ou refusée, "
-                "et quelles actions il peut entreprendre (demande de pièces complémentaires, validation manuelle, etc.)."
+                "Tu peux fournir des détails techniques complets (scores, ratios, incohérences de documents, nos règles internes). "
+                "Aide l'agent à comprendre pourquoi notre décision est favorable ou défavorable sur ce dossier, "
+                "et quelles actions notre équipe peut entreprendre (demande de pièces complémentaires, validation manuelle, etc.)."
             )
         return (
-            "You are currently speaking with a BACKOFFICE agent (bank staff member). "
+            "You are currently speaking with a BACKOFFICE agent — a colleague at our banking institution. "
             f"This agent is reviewing the application of customer « {customer_name} », who is NOT the one chatting. "
             "Use a professional and analytical tone. "
-            "Provide full technical details (scores, ratios, document inconsistencies, internal rules). "
-            "Help the agent understand why the application was approved or rejected, "
-            "and what actions they can take (request additional documents, manual validation, etc.)."
+            "Provide full technical details (scores, ratios, document inconsistencies, our internal rules). "
+            "Help the agent understand why our decision is favourable or unfavourable on this application, "
+            "and what actions our team can take (request additional documents, manual validation, etc.)."
         )
     # customer / default
     if is_fr:
         return (
             f"Tu parles actuellement avec « {customer_name} », le CLIENT propriétaire de cette demande de prêt. "
             "Adopte un ton bienveillant, clair et pédagogique. "
-            "Explique les décisions en termes simples, sans jargon technique excessif. "
-            "Guide le client sur ce qu'il peut faire pour améliorer son dossier. "
+            "Explique nos décisions en termes simples, sans jargon technique excessif. "
+            "Guide le client sur ce qu'il peut faire pour améliorer son dossier auprès de notre institution. "
             "Ne divulgue pas de détails internes réservés au backoffice (règles de scoring internes, seuils bruts, etc.)."
         )
     return (
         f"You are currently speaking with « {customer_name} », the CUSTOMER who owns this loan application. "
         "Use a warm, clear, and educational tone. "
-        "Explain decisions in simple terms, avoiding excessive technical jargon. "
-        "Guide the customer on how to improve their application. "
+        "Explain our decisions in simple terms, avoiding excessive technical jargon. "
+        "Guide the customer on how to improve their application with our institution. "
         "Do not disclose internal backoffice details (raw scoring rules, internal thresholds, etc.)."
     )
 
 
-def build_assistant_reply(
+# ── Assemblage du prompt système ──────────────────────────────────────────────
+
+def _build_system_prompt(
     *,
-    user_message: str,
-    language: str,
-    user_email: str,
+    lang: str,
+    actor_role: str,
     application: LoanApplication | None,
-    actor_role: str = "customer",
-    page_context: str = "home",
-) -> dict[str, Any]:
-    """Retourne ``{"reply": str}`` ou ``{"error": str}``.
-
-    actor_role: "customer" (default), "backoffice" ou "admin".
-    page_context: identifiant de la page courante (home, dashboard, application_detail, …).
+    user_email: str,
+    user_message: str,
+    page_context: str,
+    actor_user=None,
+) -> str:
     """
-    api_key = get_openai_api_key()
-    if not api_key:
-        return {"error": "no_api_key"}
+    Assemble the full system prompt from the five context sources.
 
-    lang = (language or "fr").lower()
+    Keeping this logic separate from build_assistant_reply() makes each
+    source independently testable and the main entry-point easy to read.
+    """
+    is_fr = lang.startswith("fr")
+    default_lang = "français" if is_fr else "English"
     loan_type = application.loan_type if application else ""
-
-    guide_ctx = _load_guide_text(actor_role, page_context)
-    profile_ctx = _build_profile_context(user_email, application, lang)
-    docs_ctx = _build_documents_context(application)
-    rag_ctx = _build_rag_context(user_message, loan_type)
-    role_instructions = _build_role_instructions(actor_role, application, lang)
 
     address_rule = (
         "RÈGLE ADRESSE (non négociable) : "
@@ -261,7 +260,30 @@ def build_assistant_reply(
         "tu NE DOIS PAS le signaler comme un problème. Ne mentionne jamais les différences d'adresse CIN/passeport."
     )
 
-    default_lang = "français" if lang.startswith("fr") else "English"
+    role_instructions = _build_role_instructions(actor_role, application, lang)
+    guide_ctx = _load_guide_text(actor_role, page_context)
+    policy_ctx = _build_policy_context(user_message, loan_type)
+    profile_ctx = _build_profile_context(user_email, application, lang)
+    docs_ctx = _build_documents_context(application)
+
+    # ── Profil de l'utilisateur connecté (toutes les infos disponibles en base) ─
+    actor_info_lines = [f"Email : {user_email}"]
+    if actor_user is not None:
+        full_name = f"{actor_user.first_name} {actor_user.last_name}".strip()
+        if full_name:
+            actor_info_lines.append(f"Nom : {full_name}")
+        actor_info_lines.append(f"Rôle : {actor_role}")
+        cust = getattr(actor_user, "customer_profile", None)
+        if cust:
+            if cust.id_card:
+                actor_info_lines.append(f"CIN : {cust.id_card}")
+            if cust.phone:
+                actor_info_lines.append(f"Téléphone : {cust.phone}")
+            if cust.address:
+                actor_info_lines.append(f"Adresse : {cust.address}")
+            if cust.country:
+                actor_info_lines.append(f"Pays : {cust.country}")
+    actor_info = "\n".join(actor_info_lines)
 
     guide_block = ""
     if guide_ctx:
@@ -272,8 +294,10 @@ SOURCE 0 — GUIDE D'UTILISATION (configuré par l'administrateur)
 {guide_ctx}
 """
 
-    system_prompt = f"""Tu es LoanWise, un assistant expert en éligibilité aux prêts.
-Tu disposes de QUATRE sources d'information que tu dois toutes utiliser pour répondre avec précision.
+    return f"""Tu es LoanWise, l'assistant interne de notre institution bancaire, spécialisé dans l'éligibilité aux prêts.
+Tu fais partie de l'équipe : parle toujours à la première personne du pluriel — utilise « notre institution », « notre politique de crédit », « nos règles », « nos clients », « notre barème ».
+Tu disposes de CINQ sources d'information que tu dois toutes utiliser pour répondre avec précision.
+SOURCE 0 = guide d'utilisation (admin) | SOURCE 1a = notre politique institutionnelle complète | SOURCE 1b = extraits pertinents | SOURCE 2 = profil/demande | SOURCE 3 = documents fournis.
 
 {address_rule}
 
@@ -288,11 +312,18 @@ Ne promets jamais une approbation ; utilise un langage indicatif.
 RÔLE DE L'INTERLOCUTEUR
 ══════════════════════════════════════════════════════
 {role_instructions}
+
+Page/section actuelle : {page_context}
+Adapte ton aide aux actions disponibles sur cette page pour le rôle ci-dessus.
+Si SOURCE 0 contient des instructions pour cette page et ce rôle, suis-les en priorité.
+
+INFORMATIONS SUR L'UTILISATEUR CONNECTÉ
+{actor_info}
 {guide_block}
 ══════════════════════════════════════════════════════
-SOURCE 1 — RÈGLES DE L'INSTITUTION (base de connaissances RAG)
+SOURCE 1 — RÈGLES DE L'INSTITUTION (politique complète + extraits pertinents)
 ══════════════════════════════════════════════════════
-{rag_ctx}
+{policy_ctx}
 
 ══════════════════════════════════════════════════════
 SOURCE 2 — PROFIL ET DEMANDE DE PRÊT DE L'UTILISATEUR
@@ -306,17 +337,63 @@ SOURCE 3 — DOCUMENTS FOURNIS PAR L'UTILISATEUR
 ══════════════════════════════════════════════════════
 """
 
+
+# ── Point d'entrée principal ──────────────────────────────────────────────────
+
+def build_assistant_reply(
+    *,
+    user_message: str,
+    language: str,
+    user_email: str,
+    application: LoanApplication | None,
+    actor_role: str = "customer",
+    actor_user=None,
+    page_context: str = "home",
+    history: list[dict] | None = None,
+) -> dict[str, Any]:
+    """Retourne ``{"reply": str, "model": str}`` ou ``{"error": str}``.
+
+    actor_role: "customer" (default), "backoffice" ou "admin".
+    actor_user: objet User Django de l'utilisateur connecté (optionnel, enrichit le prompt).
+    page_context: identifiant de la page courante (home, dashboard, application_detail, …).
+    """
+    api_key = get_openai_api_key()
+    if not api_key:
+        return {"error": "no_api_key"}
+
+    lang = (language or "fr").lower()
+    system_prompt = _build_system_prompt(
+        lang=lang,
+        actor_role=actor_role,
+        application=application,
+        user_email=user_email,
+        user_message=user_message,
+        page_context=page_context,
+        actor_user=actor_user,
+    )
+
     try:
         from openai import OpenAI
 
         client = OpenAI(api_key=api_key)
         model = getattr(settings, "LOANWISE_OPENAI_MODEL", "gpt-4o-mini")
+
+        safe_history: list[dict] = []
+        for turn in (history or [])[-20:]:
+            role = turn.get("role", "")
+            content = (turn.get("content") or "").strip()
+            if role in ("user", "assistant") and content:
+                safe_history.append({"role": role, "content": content})
+
+        messages = (
+            [{"role": "system", "content": system_prompt}]
+            + safe_history
+            + [{"role": "user", "content": user_message.strip()}]
+        )
+
         resp = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message.strip()},
-            ],
+            messages=messages,
             max_tokens=1200,
             temperature=0.3,
         )
