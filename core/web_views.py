@@ -513,12 +513,31 @@ def backoffice_loan_request_detail(request: HttpRequest, pk: int) -> HttpRespons
                     defaults={"read": False},
                 )
                 messages.success(request, _("Status updated."))
+        elif action == "submit_for_approval":
+            approver_id = request.POST.get("approver_id")
+            approver_name = ""
+            if approver_id:
+                approver = Account.objects.filter(pk=approver_id, account_type=AccountType.BACKOFFICE).first()
+                if approver:
+                    approver_name = f"{approver.first_name} {approver.last_name}".strip() or approver.email
+            request.session[f"approval_pending_{pk}"] = True
+            request.session[f"approval_approver_{pk}"] = approver_name
+            messages.success(request, _("Request submitted for approval."))
         return redirect("backoffice_loan_request_detail", pk=pk)
+
+    approval_pending = request.session.get(f"approval_pending_{pk}", False)
+    approval_approver = request.session.get(f"approval_approver_{pk}", "")
+    backoffice_users = Account.objects.filter(
+        account_type=AccountType.BACKOFFICE
+    ).exclude(pk=request.user.pk).order_by("first_name", "last_name")
 
     return render(request, "loanwise/backoffice/loan_request_detail.html", {
         "loan_request": lr,
         "documents": documents,
         "status_choices": LoanRequestStatus.choices,
+        "approval_pending": approval_pending,
+        "approval_approver": approval_approver,
+        "backoffice_users": backoffice_users,
     })
 
 
