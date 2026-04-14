@@ -66,7 +66,7 @@ class RegisterView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response({"detail": "registered", "code": "registered"}, status=status.HTTP_201_CREATED)
+        return Response({"detail": _("Account created successfully."), "code": "registered"}, status=status.HTTP_201_CREATED)
 
 
 
@@ -78,7 +78,7 @@ class LoginView(APIView):
         password = request.data.get("password", "")
         user = authenticate(request, username=email, password=password)
         if not user:
-            return Response({"detail": "invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"detail": _("Invalid email or password.")}, status=status.HTTP_401_UNAUTHORIZED)
         token, _ = Token.objects.get_or_create(user=user)
         return Response({"token": token.key, "user": UserSerializer(user).data})
 
@@ -120,7 +120,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if can_access_all_applications(user) or user.is_staff:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Backoffice and admin users cannot create loan applications.")
+            raise PermissionDenied(_("Backoffice and admin users cannot create loan applications."))
         lang = serializer.validated_data.get("language") or user.preferred_language or "fr"
         ac = serializer.validated_data.get("amount_currency")
         if not ac:
@@ -193,7 +193,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception("Orchestration failed for application %s", app.pk)
             payload = {
-                "detail": "Orchestration failed; see server logs or retry later.",
+                "detail": _("Analysis failed. Please check your data and try again."),
                 "code": "orchestration_failed",
             }
             if settings.DEBUG:
@@ -255,7 +255,7 @@ class DocumentUploadView(APIView):
         kind = request.POST.get("kind") or "generic"
         file = request.FILES.get("file")
         if not file:
-            return Response({"detail": "file required"}, status=400)
+            return Response({"detail": _("A file is required.")}, status=400)
         req = None
         if requirement_id:
             req = DocumentRequirement.objects.filter(pk=requirement_id).first()
@@ -304,9 +304,9 @@ class DocumentDownloadView(APIView):
         doc = get_object_or_404(ApplicationDocument, pk=document_id)
         app = doc.application
         if app.user_id != request.user.id and not can_access_all_applications(request.user):
-            return Response({"detail": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
         if not doc.storage_path:
-            return Response({"detail": "file not found"}, status=404)
+            return Response({"detail": _("File not found.")}, status=404)
         from django.core.files.storage import default_storage
         import mimetypes
 
@@ -315,7 +315,7 @@ class DocumentDownloadView(APIView):
             data = f.read()
             f.close()
         except Exception:
-            return Response({"detail": "file not found"}, status=404)
+            return Response({"detail": _("File not found.")}, status=404)
         mime = mimetypes.guess_type(doc.original_filename or doc.storage_path)[0] or "application/octet-stream"
         response = HttpResponse(data, content_type=mime)
         safe_name = (doc.original_filename or "document").replace('"', "'")
@@ -342,13 +342,13 @@ class AssistantChatView(APIView):
     def post(self, request):
         msg = (request.data.get("message") or "").strip()
         if not msg:
-            return Response({"detail": "message required", "code": "message_required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": _("A message is required."), "code": "message_required"}, status=status.HTTP_400_BAD_REQUEST)
         app = None
         raw_id = request.data.get("application_id")
         if raw_id is not None and str(raw_id).strip() != "":
             app = get_object_or_404(LoanApplication, pk=int(raw_id))
             if app.user_id != request.user.id and not can_access_all_applications(request.user):
-                return Response({"detail": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
         lang = getattr(request.user, "preferred_language", "fr") or "fr"
         page_context = (request.data.get("page_context") or "home").strip()
         if request.user.is_staff or request.user.is_superuser:

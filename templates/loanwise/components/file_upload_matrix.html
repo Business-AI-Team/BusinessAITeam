@@ -1,5 +1,6 @@
 {% load i18n %}
 {# Required documents matrix: each slot has label + files_needed (e.g. 3 payslips). #}
+<script>window.lwUploadFailed = "{% filter escapejs %}{% trans 'Upload failed' %}{% endfilter %}";</script>
 {{ matrix_script_data|json_script:"lw-upload-matrix-data" }}
 <div
   class="space-y-6"

@@ -638,3 +638,39 @@ msgstr "— facultatif —"
 
 msgid "An account already exists with this email address. Please log in instead."
 msgstr "Un compte existe déjà avec cette adresse e-mail. Veuillez vous connecter."
+
+msgid "Eligible"
+msgstr "Éligible"
+
+msgid "Not eligible"
+msgstr "Non éligible"
+
+msgid "Score"
+msgstr "Score"
+
+msgid "Upload failed"
+msgstr "Échec de l'envoi"
+
+msgid "Account created successfully."
+msgstr "Compte créé avec succès."
+
+msgid "Invalid email or password."
+msgstr "Email ou mot de passe incorrect."
+
+msgid "Backoffice and admin users cannot create loan applications."
+msgstr "Les agents et administrateurs ne peuvent pas créer de demandes de prêt."
+
+msgid "Analysis failed. Please check your data and try again."
+msgstr "L'analyse a échoué. Veuillez vérifier vos données et réessayer."
+
+msgid "A file is required."
+msgstr "Un fichier est requis."
+
+msgid "Access denied."
+msgstr "Accès refusé."
+
+msgid "File not found."
+msgstr "Fichier introuvable."
+
+msgid "A message is required."
+msgstr "Un message est requis."

@@ -615,3 +615,39 @@ msgstr "Your email is verified. Welcome!"
 
 msgid "— optional —"
 msgstr "— optional —"
+
+msgid "Eligible"
+msgstr "Eligible"
+
+msgid "Not eligible"
+msgstr "Not eligible"
+
+msgid "Score"
+msgstr "Score"
+
+msgid "Upload failed"
+msgstr "Upload failed"
+
+msgid "Account created successfully."
+msgstr "Account created successfully."
+
+msgid "Invalid email or password."
+msgstr "Invalid email or password."
+
+msgid "Backoffice and admin users cannot create loan applications."
+msgstr "Backoffice and admin users cannot create loan applications."
+
+msgid "Analysis failed. Please check your data and try again."
+msgstr "Analysis failed. Please check your data and try again."
+
+msgid "A file is required."
+msgstr "A file is required."
+
+msgid "Access denied."
+msgstr "Access denied."
+
+msgid "File not found."
+msgstr "File not found."
+
+msgid "A message is required."
+msgstr "A message is required."

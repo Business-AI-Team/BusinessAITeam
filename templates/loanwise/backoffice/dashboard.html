@@ -22,8 +22,8 @@
         <select x-model="filterStatus"
                 class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-sky-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 min-w-[150px]">
           <option value="">{% trans "All" %}</option>
-          <option value="eligible">{% get_current_language as cur_lang %}{% if cur_lang == "fr" %}Éligible{% else %}Eligible{% endif %}</option>
-          <option value="not_eligible">{% get_current_language as cur_lang %}{% if cur_lang == "fr" %}Non éligible{% else %}Not eligible{% endif %}</option>
+          <option value="eligible">{% trans "Eligible" %}</option>
+          <option value="not_eligible">{% trans "Not eligible" %}</option>
         </select>
       </div>
       <div class="flex flex-col gap-1">
@@ -93,17 +93,16 @@
               {% if app.term_months %}{{ app.term_months }} {% trans "mo." %}{% else %}—{% endif %}
             </td>
             <td class="px-4 py-3 text-center">
-              {% get_current_language as cur_lang %}
               {% with d=app.roi_summary.eligibility_detail.decision %}
               {% if d == 'validated' %}
-                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {% if cur_lang == "fr" %}Éligible{% else %}Eligible{% endif %}</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {% trans "Eligible" %}</span>
               {% elif d == 'rejected' %}
-                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% if cur_lang == "fr" %}Non éligible{% else %}Not eligible{% endif %}</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% trans "Not eligible" %}</span>
               {% elif app.eligibility_score is not None %}
                 {% if app.eligibility_score >= 55 %}
-                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {% if cur_lang == "fr" %}Éligible{% else %}Eligible{% endif %}</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {% trans "Eligible" %}</span>
                 {% else %}
-                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% if cur_lang == "fr" %}Non éligible{% else %}Not eligible{% endif %}</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% trans "Not eligible" %}</span>
                 {% endif %}
               {% else %}
               <span class="text-slate-400 dark:text-slate-500">—</span>

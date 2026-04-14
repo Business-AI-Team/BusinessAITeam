@@ -74,10 +74,10 @@ function loanwiseFileUpload(opts) {
             );
           } catch (e) {}
         } else {
-          this.error = "Upload failed";
+          this.error = (window.lwUploadFailed || "Upload failed");
         }
       } catch (e) {
-        this.error = "Upload failed";
+        this.error = (window.lwUploadFailed || "Upload failed");
       } finally {
         this.uploading = false;
       }
@@ -166,11 +166,11 @@ function loanwiseFileUploadMatrix(opts) {
           } catch (e) {}
         } else {
           this.errorId = slot.requirement_id;
-          this.lastError = "Upload failed";
+          this.lastError = (window.lwUploadFailed || "Upload failed");
         }
       } catch (e) {
         this.errorId = slot.requirement_id;
-        this.lastError = "Upload failed";
+        this.lastError = (window.lwUploadFailed || "Upload failed");
       } finally {
         this.uploadingId = null;
       }
