@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: LoanWise 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: \n"
-"PO-Revision-Date: \n"
+"POT-Creation-Date: 2026-04-15 09:00\n"
+"PO-Revision-Date: 2026-04-15 09:00\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: fr\n"
@@ -718,10 +718,10 @@ msgid "Track eligibility, documents, and pipeline progress."
 msgstr "Suivez l'éligibilité, les documents et la progression du pipeline."
 
 msgid "Evaluation detail"
-msgstr "Détail de l'évaluation"
+msgstr "Détail de l'évaluation par"
 
-msgid "Combines computed score, financial ratios, policy excerpts (RAG), and cross-checks declared figures against amounts and addresses read on your uploads."
-msgstr "Combine le score calculé, les ratios financiers, les extraits de politique (RAG), et vérifie les données déclarées par rapport aux montants et adresses lus sur les pièces téléversées."
+msgid "Combines computed score, financial ratios, and cross-checks declared figures against amounts and addresses read on your uploads."
+msgstr "Combine le score calculé, les ratios financiers, et vérifie les données déclarées par rapport aux montants et adresses lus sur les pièces téléversées."
 
 msgid "Declared vs documents"
 msgstr "Déclaré vs documents"
@@ -748,11 +748,144 @@ msgstr "Synthèse OpenAI (LangChain)"
 msgid "Indicative decision from the written policy documents and uploaded file analyses (no separate form fields sent to the model)."
 msgstr "Décision indicative issue des documents de politique écrits et des analyses de fichiers téléversés (aucun champ de formulaire séparé envoyé au modèle)."
 
-msgid "Policy excerpts (RAG)"
-msgstr "Extraits de politique (RAG)"
 
 msgid "OpenAI synthesis unavailable."
 msgstr "Synthèse OpenAI indisponible."
 
 msgid "Action required: document inconsistency"
 msgstr "Action requise : incohérence dans les documents"
+
+msgid "Validated by Backoffice"
+msgstr "Validé par le Backoffice"
+
+msgid "Validated by LoanWise AI"
+msgstr "Validé par LoanWise IA"
+
+msgid "Rejected by Backoffice"
+msgstr "Rejeté par le Backoffice"
+
+msgid "Rejected by LoanWise AI"
+msgstr "Rejeté par LoanWise IA"
+
+msgid "Manual eligibility override"
+msgstr "Décision manuelle d'éligibilité"
+
+msgid "Use these controls to override the LoanWise AI decision. The badge displayed on the application will reflect your manual decision."
+msgstr "Utilisez ces contrôles pour remplacer la décision de LoanWise IA. Le badge affiché sur la demande reflètera votre décision manuelle."
+
+msgid "AI decision (no override)"
+msgstr "Décision IA (aucune modification)"
+
+msgid "Override applied by"
+msgstr "Décision prise par"
+
+msgid "Reason / comment (optional)"
+msgstr "Raison / commentaire (optionnel)"
+
+msgid "Optional note for audit trail…"
+msgstr "Note optionnelle pour la traçabilité…"
+
+msgid "Force Eligible"
+msgstr "Forcer Éligible"
+
+msgid "Force Rejected"
+msgstr "Forcer Rejeté"
+
+msgid "Reset to AI decision"
+msgstr "Rétablir la décision IA"
+
+msgid "Already validated by Backoffice"
+msgstr "Déjà validé par le Backoffice"
+
+msgid "Already rejected by Backoffice"
+msgstr "Déjà rejeté par le Backoffice"
+
+msgid "Saving…"
+msgstr "Enregistrement…"
+
+msgid "Saved!"
+msgstr "Enregistré !"
+
+msgid "Source"
+msgstr "Source"
+
+# ── Profile section ──────────────────────────────────────────────────────────
+msgid "Your profile"
+msgstr "Votre profil"
+
+msgid "Personal data comes from your account; it is used for scoring and document checks (e.g. address vs proof of address)."
+msgstr "Les données personnelles viennent de votre compte ; elles sont utilisées pour le scoring et les vérifications de documents (ex. adresse vs justificatif de domicile)."
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "ID card number"
+msgstr "N° pièce d'identité"
+
+msgid "Phone"
+msgstr "Téléphone"
+
+msgid "Address"
+msgstr "Adresse"
+
+msgid "Country"
+msgstr "Pays"
+
+msgid "Income (annual, estimated)"
+msgstr "Revenu (annuel, estimé)"
+
+msgid "from payslip analysis"
+msgstr "d'après l'analyse des bulletins"
+
+msgid "Upload payslips; the AI will estimate annual income from the last months."
+msgstr "Téléversez vos bulletins de salaire ; l'IA estimera le revenu annuel à partir des derniers mois."
+
+# ── Loan request section ──────────────────────────────────────────────────────
+msgid "Loan request"
+msgstr "Demande de prêt"
+
+msgid "Only the amount and duration are entered here; income and identity are taken from your profile."
+msgstr "Seuls le montant et la durée sont renseignés ici ; le revenu et l'identité viennent de votre profil."
+
+msgid "Amount requested"
+msgstr "Montant demandé"
+
+msgid "Currency"
+msgstr "Devise"
+
+msgid "Term (months)"
+msgstr "Durée (mois)"
+
+msgid "These details are saved automatically at analysis time."
+msgstr "Ces informations sont sauvegardées automatiquement lors de l'analyse."
+
+# ── Documents section ─────────────────────────────────────────────────────────
+msgid "Provided"
+msgstr "Fourni"
+
+msgid "file(s)"
+msgstr "fichier(s)"
+
+msgid "Provided documents"
+msgstr "Documents fournis"
+
+msgid "Documents uploaded for this application. Backoffice can open them."
+msgstr "Pièces justificatives déposées pour cette demande. Le backoffice peut les ouvrir."
+
+msgid "Loading documents…"
+msgstr "Chargement des documents…"
+
+msgid "No documents found."
+msgstr "Aucun document trouvé."
+
+msgid "Open"
+msgstr "Ouvrir"
+
+msgid "Delete this file"
+msgstr "Supprimer ce fichier"
+
+msgid "Required documents"
+msgstr "Documents requis"
+
+msgid "Submit your ID, a proof of address and your pay slips."
+msgstr "Déposez votre pièce d'identité, un justificatif de domicile et vos bulletins de salaire."

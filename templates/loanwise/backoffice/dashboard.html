@@ -71,6 +71,7 @@
             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Amount" %}</th>
             <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Term" %}</th>
             <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Eligibility" %}</th>
+            <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden lg:table-cell">{% trans "Source" %}</th>
             <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{% trans "Date" %}</th>
             <th class="px-4 py-3"></th>
           </tr>
@@ -78,13 +79,20 @@
         <tbody>
           {% for app in applications %}
           <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-violet-50/40 dark:hover:bg-violet-950/20 transition-colors"
-              x-show="showRow('{% with d=app.roi_summary.eligibility_detail.decision %}{% if d == 'validated' %}eligible{% elif d == 'rejected' %}not_eligible{% elif app.eligibility_score is not None %}{% if app.eligibility_score >= 55 %}eligible{% else %}not_eligible{% endif %}{% else %}pending{% endif %}{% endwith %}','{{ app.loan_type }}','{{ app.created_at|date:'Y-m-d' }}')"
+              x-show="showRow('{% if app.is_eligible is None %}pending{% elif app.is_eligible %}eligible{% else %}not_eligible{% endif %}','{{ app.loan_type }}','{{ app.created_at|date:'Y-m-d' }}')"
               x-cloak>
             <td class="px-4 py-3">
               <span class="font-mono text-xs font-semibold text-sky-600 dark:text-sky-400">{{ app.reference }}</span>
             </td>
-            <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 hidden md:table-cell max-w-[160px] truncate">
-              {{ app.user.email }}
+            <td class="px-4 py-3 text-xs hidden md:table-cell max-w-[180px]">
+              {% with full=app.user.get_full_name %}
+              {% if full %}
+              <span class="font-medium text-slate-700 dark:text-slate-200 block truncate">{{ full }}</span>
+              <span class="text-slate-400 dark:text-slate-500 block truncate">{{ app.user.email }}</span>
+              {% else %}
+              <span class="text-slate-500 dark:text-slate-400 block truncate">{{ app.user.email }}</span>
+              {% endif %}
+              {% endwith %}
             </td>
             <td class="px-4 py-3 text-slate-700 dark:text-slate-200">{{ app.get_loan_type_display }}</td>
             <td class="px-4 py-3 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100 whitespace-nowrap">
@@ -94,22 +102,38 @@
               {% if app.term_months %}{{ app.term_months }} {% trans "mo." %}{% else %}—{% endif %}
             </td>
             <td class="px-4 py-3 text-center">
-              {% with d=app.roi_summary.eligibility_detail.decision %}
-              {% if d == 'validated' %}
+              {% if app.is_eligible is None %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">⏳ {% trans "Pending" %}</span>
+              {% elif app.is_eligible %}
                 <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {% trans "Eligible" %}</span>
-              {% elif d == 'rejected' %}
-                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% trans "Not eligible" %}</span>
-              {% elif app.eligibility_score is not None %}
-                {% if app.eligibility_score >= 55 %}
-                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">✓ {% trans "Eligible" %}</span>
-                {% else %}
-                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% trans "Not eligible" %}</span>
-                {% endif %}
               {% else %}
-              <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">⏳ {% trans "Pending" %}</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">✕ {% trans "Not eligible" %}</span>
               {% endif %}
-              {% endwith %}
+              {% if app.eligibility_score is not None %}
+              <span class="mt-0.5 block text-xs tabular-nums text-slate-400 dark:text-slate-500">{{ app.eligibility_score }}%</span>
+              {% endif %}
             </td>
+            <!-- Source: IA or Backoffice -->
+            <td class="px-4 py-3 text-center hidden lg:table-cell">
+              {% if app.eligibility_override is not None %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+                  {% if app.eligibility_override_by %}
+                    {% with full=app.eligibility_override_by.get_full_name %}
+                    {% if full %}{{ full }}{% else %}{{ app.eligibility_override_by.email }}{% endif %}
+                    {% endwith %}
+                  {% else %}{% trans "Backoffice" %}{% endif %}
+                </span>
+              {% elif app.eligibility_score is not None %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z"/></svg>
+                  LoanWise AI
+                </span>
+              {% else %}
+                <span class="text-slate-400 dark:text-slate-600">—</span>
+              {% endif %}
+            </td>
+
             <td class="px-4 py-3 text-center text-xs text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
               {{ app.created_at|date:"d/m/Y" }}
             </td>

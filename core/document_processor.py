@@ -16,7 +16,7 @@ from typing import Any
 
 from django.conf import settings
 
-from core.openai_config import get_openai_api_key
+from core.openai_config import get_openai_api_key, get_openai_client
 from core.rag_eligibility import extract_text_from_file
 
 logger = logging.getLogger(__name__)
@@ -237,7 +237,7 @@ def _responses_output_text(resp: Any) -> str:
 def _pdf_via_openai_responses(path: Path, language: str, api_key: str, reference_date=None) -> dict[str, Any] | None:
     """Envoie le PDF brut via Responses API (input_file) — fonctionne pour scans et PDF texte."""
     try:
-        from openai import OpenAI
+        from openai import OpenAI  # noqa: F401 — vérifie que le package est installé
     except ImportError:
         return None
 
@@ -253,7 +253,9 @@ def _pdf_via_openai_responses(path: Path, language: str, api_key: str, reference
     filename = path.name or "document.pdf"
 
     try:
-        client = OpenAI(api_key=api_key)
+        client = get_openai_client()
+        if client is None:
+            return None
         resp = client.responses.create(
             model=model,
             input=[
@@ -303,7 +305,7 @@ def _pdf_via_raster_vision(path: Path, language: str, api_key: str, reference_da
     """PyMuPDF: pages → PNG → Chat Vision multi-images."""
     try:
         import fitz  # PyMuPDF
-        from openai import BadRequestError, OpenAI
+        from openai import BadRequestError  # noqa: F401
     except ImportError:
         return None
 
@@ -338,7 +340,9 @@ def _pdf_via_raster_vision(path: Path, language: str, api_key: str, reference_da
         return None
 
     try:
-        client = OpenAI(api_key=api_key)
+        client = get_openai_client()
+        if client is None:
+            return None
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": content}],
@@ -375,9 +379,9 @@ def _pdf_via_extracted_text_chat(path: Path, language: str, api_key: str, refere
     prompt = _loan_doc_extracted_text_prompt(language, reference_date)
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=api_key)
+        client = get_openai_client()
+        if client is None:
+            return None
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt + text}],
@@ -445,7 +449,7 @@ def _analyze_with_openai_vision(path: Path, language: str, reference_date=None) 
     if not api_key:
         return _fallback_result("openai_no_api_key", language, filename=path.name)
     try:
-        from openai import BadRequestError, OpenAI
+        from openai import BadRequestError  # noqa: F401
     except ImportError:
         logger.warning("openai package not installed; pip install openai")
         return _fallback_result("openai_not_installed", language, filename=path.name)
@@ -455,7 +459,9 @@ def _analyze_with_openai_vision(path: Path, language: str, reference_date=None) 
         return _fallback_result("unsupported_image_format", language, filename=path.name)
 
     try:
-        client = OpenAI(api_key=api_key)
+        client = get_openai_client()
+        if client is None:
+            return _fallback_result("openai_no_api_key", language, filename=path.name)
         model = getattr(settings, "LOANWISE_OPENAI_VISION_MODEL", "gpt-4o-mini")
         prompt = _loan_doc_json_prompt(language, reference_date)
 

@@ -6,9 +6,9 @@
 {% block content %}
 <div class="space-y-10" x-data="appWorkspace({{ application.id }}, { initialProgress: {{ lw_initial_progress }}, loanAmount: '{% filter escapejs %}{{ application.amount_requested|unlocalize }}{% endfilter %}', loanTerm: {% if application.term_months %}{{ application.term_months }}{% else %}null{% endif %}, loanCurrency: '{% filter escapejs %}{{ application.amount_currency|default:"EUR" }}{% endfilter %}' })" x-init="csrf = getCookie('csrftoken'); init()" @loanwise-file-uploaded.window="onFileUploaded($event); progressPct = Math.min(88, progressPct + 12)">
   {% if lw_portal_backoffice %}
-  <div class="animate-fade-in-up rounded-2xl border border-violet-400/50 bg-violet-950/25 p-4 text-sm text-violet-100 dark:border-violet-600/50">
+  <div class="animate-fade-in-up rounded-2xl border border-violet-300 bg-violet-50 p-4 text-sm text-violet-900 dark:border-violet-600/50 dark:bg-violet-950/25 dark:text-violet-100">
     <p class="font-semibold">{% trans "Backoffice view" %}</p>
-    <p class="mt-1 text-xs text-violet-200/90">{% trans "Applicant" %}: {{ lw_applicant_email }} · <a href="{% url 'backoffice_dashboard' %}" class="underline hover:text-white">{% trans "All applications" %}</a></p>
+    <p class="mt-1 text-xs text-violet-700 dark:text-violet-200/90">{% trans "Applicant" %}: {{ lw_applicant_name }} · <a href="{% url 'backoffice_dashboard' %}" class="underline hover:text-violet-900 dark:hover:text-white">{% trans "All applications" %}</a></p>
   </div>
   {% endif %}
 
@@ -31,16 +31,21 @@
         <span class="text-lg font-bold text-sky-700 dark:text-sky-300">{% trans "Analyse en cours…" %}</span>
         <span class="text-xs text-sky-500 dark:text-sky-400">{% trans "Résultat disponible dans quelques instants" %}</span>
       </div>
-      <!-- Static server-rendered badge (eligible / not eligible / not yet analysed) -->
+      <!-- Static server-rendered badge — override backoffice prioritaire sur la décision IA -->
       <div x-show="!analyzing">
-      {% if lw_eligibility_detail and not lw_eligibility_detail.error %}
-        {% if lw_eligibility_detail.decision == 'validated' %}
+      {% if application.eligibility_override is not None %}
+        {# ── Décision manuelle backoffice ── #}
+        {% if application.eligibility_override %}
         <div class="flex flex-col items-center gap-1 rounded-2xl bg-emerald-50 px-6 py-4 shadow-md ring-2 ring-emerald-400/60 dark:bg-emerald-950/50 dark:ring-emerald-500/50">
           <span class="text-4xl">✅</span>
           <span class="text-lg font-bold text-emerald-700 dark:text-emerald-300">{% trans "Eligible" %}</span>
           {% if application.eligibility_score is not None %}
           <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{% trans "Score" %} : {{ application.eligibility_score }}</span>
           {% endif %}
+          <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+            {% trans "Validated by Backoffice" %}{% if lw_override_by_name %} · {{ lw_override_by_name }}{% endif %}
+          </span>
         </div>
         {% else %}
         <div class="flex flex-col items-center gap-1 rounded-2xl bg-rose-50 px-6 py-4 shadow-md ring-2 ring-rose-400/60 dark:bg-rose-950/50 dark:ring-rose-500/50">
@@ -49,6 +54,37 @@
           {% if application.eligibility_score is not None %}
           <span class="text-sm font-semibold text-rose-600 dark:text-rose-400">{% trans "Score" %} : {{ application.eligibility_score }}</span>
           {% endif %}
+          <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+            {% trans "Rejected by Backoffice" %}{% if lw_override_by_name %} · {{ lw_override_by_name }}{% endif %}
+          </span>
+        </div>
+        {% endif %}
+      {% elif lw_eligibility_detail and not lw_eligibility_detail.error %}
+        {# ── Décision IA ── #}
+        {% if lw_eligibility_detail.decision == 'validated' %}
+        <div class="flex flex-col items-center gap-1 rounded-2xl bg-emerald-50 px-6 py-4 shadow-md ring-2 ring-emerald-400/60 dark:bg-emerald-950/50 dark:ring-emerald-500/50">
+          <span class="text-4xl">✅</span>
+          <span class="text-lg font-bold text-emerald-700 dark:text-emerald-300">{% trans "Eligible" %}</span>
+          {% if application.eligibility_score is not None %}
+          <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{% trans "Score" %} : {{ application.eligibility_score }}</span>
+          {% endif %}
+          <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z"/></svg>
+            {% trans "Validated by LoanWise AI" %}
+          </span>
+        </div>
+        {% else %}
+        <div class="flex flex-col items-center gap-1 rounded-2xl bg-rose-50 px-6 py-4 shadow-md ring-2 ring-rose-400/60 dark:bg-rose-950/50 dark:ring-rose-500/50">
+          <span class="text-4xl">❌</span>
+          <span class="text-lg font-bold text-rose-700 dark:text-rose-300">{% trans "Not eligible" %}</span>
+          {% if application.eligibility_score is not None %}
+          <span class="text-sm font-semibold text-rose-600 dark:text-rose-400">{% trans "Score" %} : {{ application.eligibility_score }}</span>
+          {% endif %}
+          <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z"/></svg>
+            {% trans "Rejected by LoanWise AI" %}
+          </span>
         </div>
         {% endif %}
       {% else %}
@@ -76,9 +112,15 @@
 
   {% if lw_portal_backoffice and lw_eligibility_detail and not lw_eligibility_detail.error %}
   <div class="animate-fade-in-up rounded-2xl border border-slate-300/90 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-900/90">
-    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Evaluation detail" %}</h2>
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+      {% trans "Evaluation detail" %}
+      <span class="ml-2 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-200 align-middle">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z"/></svg>
+        LoanWise AI
+      </span>
+    </h2>
     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-      {% trans "Combines computed score, financial ratios, policy excerpts (RAG), and cross-checks declared figures against amounts and addresses read on your uploads." %}
+      {% trans "Combines computed score, financial ratios, and cross-checks declared figures against amounts and addresses read on your uploads." %}
     </p>
     {% if lw_eligibility_detail.document_consistency and lw_eligibility_detail.document_consistency.issues %}
     <div class="mt-3 rounded-lg border border-amber-300/80 bg-amber-50/90 p-3 dark:border-amber-700/60 dark:bg-amber-950/40">
@@ -156,14 +198,103 @@
     {% elif lw_eligibility_detail.llm and lw_eligibility_detail.llm.unavailable %}
     <p class="mt-4 text-xs text-amber-700 dark:text-amber-300">{% trans "OpenAI synthesis unavailable." %} {{ lw_eligibility_detail.llm.error }}</p>
     {% endif %}
-    {% if lw_portal_backoffice and lw_eligibility_detail.rag_snippets %}
-    <div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
-      <p class="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">{% trans "Policy excerpts (RAG)" %}</p>
-      {% for snip in lw_eligibility_detail.rag_snippets %}
-      <p class="mt-2 border-l-2 border-violet-400/70 pl-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{{ snip }}</p>
-      {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if lw_portal_backoffice %}
+  <!-- ── Backoffice: Manual Eligibility Override ─────────────────────────── -->
+  <div id="lw-override-panel"
+       class="animate-fade-in-up rounded-2xl border border-slate-300/90 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-900/90"
+       x-data="{
+         overrideLoading: false,
+         overrideDone: false,
+         overrideNote: '{{ lw_override_note|escapejs }}',
+         overrideStatus: {% if application.eligibility_override is None %}'none'{% elif application.eligibility_override %}'eligible'{% else %}'rejected'{% endif %},
+         overrideBy: '{{ lw_override_by_name|escapejs }}',
+         overrideAt: '{{ lw_override_at|date:'d/m/Y H:i'|default:'' }}',
+         async doOverride(action) {
+           if (this.overrideLoading) return;
+           this.overrideLoading = true;
+           try {
+             const res = await fetch('/api/applications/{{ application.pk }}/override-eligibility/', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' },
+               body: JSON.stringify({ action, note: this.overrideNote }),
+             });
+             const data = await res.json();
+             if (data.ok) {
+               this.overrideStatus = data.eligibility_override === null ? 'none' : data.eligibility_override ? 'eligible' : 'rejected';
+               this.overrideBy = data.override_by || '';
+               this.overrideAt = data.override_at ? new Date(data.override_at).toLocaleString() : '';
+               this.overrideDone = true;
+               setTimeout(() => { window.location.reload(); }, 900);
+             }
+           } finally { this.overrideLoading = false; }
+         }
+       }">
+    <div class="flex items-center gap-2">
+      <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{% trans "Manual eligibility override" %}</h2>
+      <template x-if="overrideStatus === 'eligible'">
+        <span class="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+          {% trans "Validated by Backoffice" %}
+        </span>
+      </template>
+      <template x-if="overrideStatus === 'rejected'">
+        <span class="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+          {% trans "Rejected by Backoffice" %}
+        </span>
+      </template>
+      <template x-if="overrideStatus === 'none'">
+        <span class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z"/></svg>
+          {% trans "AI decision (no override)" %}
+        </span>
+      </template>
     </div>
-    {% endif %}
+    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+      {% trans "Use these controls to override the LoanWise AI decision. The badge displayed on the application will reflect your manual decision." %}
+    </p>
+
+    <template x-if="overrideStatus !== 'none'">
+      <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        {% trans "Override applied by" %} <span class="font-medium text-slate-700 dark:text-slate-200" x-text="overrideBy"></span>
+        <template x-if="overrideAt"> — <span x-text="overrideAt"></span></template>
+      </p>
+    </template>
+
+    <div class="mt-4">
+      <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">{% trans "Reason / comment (optional)" %}</label>
+      <textarea x-model="overrideNote" rows="2"
+                class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
+                placeholder="{% trans 'Optional note for audit trail…' %}"></textarea>
+    </div>
+
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <button @click="doOverride('eligible')"
+              :disabled="overrideLoading || overrideStatus === 'eligible'"
+              :title="overrideStatus === 'eligible' ? '{% filter escapejs %}{% trans "Already validated by Backoffice" %}{% endfilter %}' : ''"
+              class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed dark:bg-emerald-500 dark:hover:bg-emerald-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        {% trans "Force Eligible" %}
+      </button>
+      <button @click="doOverride('rejected')"
+              :disabled="overrideLoading || overrideStatus === 'rejected'"
+              :title="overrideStatus === 'rejected' ? '{% filter escapejs %}{% trans "Already rejected by Backoffice" %}{% endfilter %}' : ''"
+              class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed dark:bg-rose-500 dark:hover:bg-rose-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        {% trans "Force Rejected" %}
+      </button>
+      <button @click="doOverride('reset')"
+              :disabled="overrideLoading || overrideStatus === 'none'"
+              class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+        {% trans "Reset to AI decision" %}
+      </button>
+      <span x-show="overrideLoading" class="text-xs text-slate-400">{% trans "Saving…" %}</span>
+      <span x-show="overrideDone" x-transition class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{% trans "Saved!" %}</span>
+    </div>
   </div>
   {% endif %}
 
@@ -193,10 +324,10 @@
             <span class="text-xs font-semibold"
                   :class="slot.uploaded >= slot.files_needed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'">
               <template x-if="slot.uploaded >= slot.files_needed">
-                <span>✔ {% trans "Fourni" %}</span>
+                <span>✔ {% trans "Provided" %}</span>
               </template>
               <template x-if="slot.uploaded < slot.files_needed">
-                <span x-text="slot.uploaded + ' / ' + slot.files_needed + ' {% trans "fichier(s)" %}'"></span>
+                <span x-text="slot.uploaded + ' / ' + slot.files_needed + ' {% trans "file(s)" %}'"></span>
               </template>
             </span>
           </div>
@@ -249,7 +380,7 @@
                      class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950">
             </div>
           </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Ces informations sont sauvegardées automatiquement lors de l'analyse." %}</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "These details are saved automatically at analysis time." %}</p>
         </div>
       </div>
     </div>
@@ -262,8 +393,8 @@
       <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80"
            x-data="appDocuments({{ application.id }})"
            x-init="load()">
-        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents fournis" %}</h2>
-        <p class="mt-1 text-xs text-slate-500">{% trans "Pièces justificatives déposées pour cette demande. Le backoffice peut les télécharger." %}</p>
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Provided documents" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "Documents uploaded for this application. Backoffice can open them." %}</p>
 
         <!-- Loading state -->
         <template x-if="loading">
@@ -272,7 +403,7 @@
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
             </svg>
-            {% trans "Chargement des documents…" %}
+            {% trans "Loading documents…" %}
           </div>
         </template>
 
@@ -283,7 +414,7 @@
 
         <!-- Empty state -->
         <template x-if="!loading && !error && documents.length === 0">
-          <p class="mt-4 text-sm text-slate-500">{% trans "Aucun document trouvé." %}</p>
+          <p class="mt-4 text-sm text-slate-500">{% trans "No documents found." %}</p>
         </template>
 
         <!-- Document list -->
@@ -299,17 +430,17 @@
                   </div>
                 </div>
                 <template x-if="doc.download_url">
-                  <a :href="doc.download_url" target="_blank"
-                     class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-sky-400">
-                    ⬇ {% trans "Télécharger" %}
+                  <a :href="doc.download_url" target="_blank" rel="noopener noreferrer"
+                     class="flex-shrink-0 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:border-sky-400 hover:bg-sky-100 dark:border-sky-700/60 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-900/50">
+                    ↗ {% trans "Open" %}
                   </a>
                 </template>
                 <template x-if="!doc.download_url">
                   <div class="flex items-center gap-2 flex-shrink-0">
-                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">✔ {% trans "Fourni" %}</span>
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">✔ {% trans "Provided" %}</span>
                     <button type="button"
                             class="rounded-full p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition"
-                            :title="'{% filter escapejs %}{% trans "Supprimer ce fichier" %}{% endfilter %}'"
+                            :title="'{% filter escapejs %}{% trans "Delete this file" %}{% endfilter %}'"
                             @click="removeDoc(doc.id)">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -326,8 +457,8 @@
       {% else %}
       {# ── Avant analyse : matrice d'upload normale ── #}
       <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 dark:border-slate-800 dark:bg-slate-900/80">
-        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Documents requis" %}</h2>
-        <p class="mt-1 text-xs text-slate-500">{% trans "Déposez votre pièce d'identité, un justificatif de domicile et vos bulletins de salaire." %}</p>
+        <h2 class="font-semibold text-slate-900 dark:text-white">{% trans "Required documents" %}</h2>
+        <p class="mt-1 text-xs text-slate-500">{% trans "Submit your ID, a proof of address and your pay slips." %}</p>
         <div class="mt-4">
           {% include "loanwise/components/file_upload_matrix.html" with lw_upload_app_id=application.id %}
         </div>

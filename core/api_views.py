@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from django.conf import settings
 from django.db import IntegrityError
 from django.contrib.auth import authenticate, get_user_model
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -37,7 +37,7 @@ from core.models import (
     LoanApplication,
     LoanApplicationStatus,
 )
-from core.assistant_chat import build_assistant_reply
+from core.assistant_chat import build_assistant_reply, stream_assistant_reply
 from core.pdf_report import build_application_pdf
 from core.security_utils import sha256_file
 from core.serializers import (
@@ -404,6 +404,95 @@ class AssistantChatView(APIView):
         return Response(out)
 
 
+class AssistantChatStreamView(APIView):
+    """Streaming SSE version of AssistantChatView — tokens delivered as they are generated."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        msg = (request.data.get("message") or "").strip()
+        if not msg:
+            return Response({"detail": _("A message is required."), "code": "message_required"}, status=status.HTTP_400_BAD_REQUEST)
+        app = None
+        raw_id = request.data.get("application_id")
+        if raw_id is not None and str(raw_id).strip() != "":
+            app = get_object_or_404(LoanApplication, pk=int(raw_id))
+            if app.user_id != request.user.id and not can_access_all_applications(request.user):
+                return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
+        lang = resolve_language(request, request.user, app)
+        page_context = (request.data.get("page_context") or "home").strip()
+        raw_history = request.data.get("history")
+        history = raw_history if isinstance(raw_history, list) else []
+        if request.user.is_staff or request.user.is_superuser:
+            actor_role = "admin"
+        elif can_access_all_applications(request.user):
+            actor_role = "backoffice"
+        else:
+            actor_role = "customer"
+        gen = stream_assistant_reply(
+            user_message=msg,
+            language=str(lang),
+            user_email=request.user.email,
+            actor_user=request.user,
+            application=app,
+            actor_role=actor_role,
+            page_context=page_context,
+            history=history,
+        )
+        response = StreamingHttpResponse(gen, content_type="text/event-stream; charset=utf-8")
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+
+class EligibilityOverrideView(APIView):
+    """Backoffice/admin: manually override (or reset) the eligibility decision of an application."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not (can_access_all_applications(request.user) or request.user.is_staff or request.user.is_superuser):
+            return Response({"detail": _("Access denied.")}, status=status.HTTP_403_FORBIDDEN)
+        app = get_object_or_404(LoanApplication, pk=pk)
+        action = (request.data.get("action") or "").strip()
+        note = (request.data.get("note") or "").strip()
+        from django.utils import timezone as _tz
+        if action == "eligible":
+            app.eligibility_override = True
+            app.eligibility_override_by = request.user
+            app.eligibility_override_at = _tz.now()
+            app.eligibility_override_note = note
+        elif action == "rejected":
+            app.eligibility_override = False
+            app.eligibility_override_by = request.user
+            app.eligibility_override_at = _tz.now()
+            app.eligibility_override_note = note
+        elif action == "reset":
+            app.eligibility_override = None
+            app.eligibility_override_by = None
+            app.eligibility_override_at = None
+            app.eligibility_override_note = ""
+        else:
+            return Response(
+                {"detail": _("Invalid action. Use 'eligible', 'rejected', or 'reset'.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        app.save(update_fields=[
+            "eligibility_override", "eligibility_override_by",
+            "eligibility_override_at", "eligibility_override_note", "updated_at",
+        ])
+        override_by_name = ""
+        if app.eligibility_override_by_id:
+            u = app.eligibility_override_by
+            override_by_name = f"{u.first_name} {u.last_name}".strip()
+        return Response({
+            "ok": True,
+            "eligibility_override": app.eligibility_override,
+            "override_by": override_by_name,
+            "override_at": app.eligibility_override_at.isoformat() if app.eligibility_override_at else None,
+        })
+
+
 class ApplicationRagGuidanceView(APIView):
     """Return RAG-based eligibility guidance for an application (async load)."""
 
@@ -455,8 +544,8 @@ class ApplicationDocumentsView(APIView):
                     "original_filename": doc.original_filename,
                     "file_size": doc.file_size or 0,
                     "requirement_id": doc.requirement_id,
-                    # download_url is always provided; the frontend shows the button only for backoffice/admin
-                    "download_url": f"/api/documents/{doc.pk}/download/" if can_download else None,
+                    # download_url shown only to backoffice/admin AND only when the file still exists on disk
+                    "download_url": f"/api/documents/{doc.pk}/download/" if (can_download and doc.storage_path) else None,
                 }
             )
         return Response({"documents": results, "can_download": can_download})

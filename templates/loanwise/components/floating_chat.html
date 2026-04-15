@@ -104,6 +104,43 @@
         if (wrap && !wrap.hasChildNodes()) {
           this.addMessage('ai', '{% filter escapejs %}{% trans "Hello! How can I help you with your loan application?" %}{% endfilter %}', false);
         }
+        /* Connection warm-up: fire a silent background request to establish the
+           TCP/TLS connection to OpenAI so the user's first real message is fast. */
+        this._warmUp();
+      },
+
+      _warmUp() {
+        try {
+          const body = { message: '.', page_context: '{{ lw_chat_page_context|default:"home" }}' };
+          if (appId !== null && appId !== undefined && appId !== '') body.application_id = appId;
+          fetch('/api/assistant/chat/stream/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.getCookie('csrftoken'),
+            },
+            body: JSON.stringify(body),
+          }).then(function(r) {
+            /* Cancel immediately — we only needed the connection, not the response. */
+            if (r.body) r.body.cancel();
+          }).catch(function() {});
+        } catch (_) {}
+      },
+
+      /* Create an empty AI bubble and return its inner content div for live updates */
+      createStreamBubble() {
+        const wrap = this.$refs.messages;
+        if (!wrap) return null;
+        const div = document.createElement('div');
+        div.className = 'flex justify-start';
+        div.id = 'lw-stream-bubble';
+        const inner = document.createElement('div');
+        inner.className = 'max-w-[88%] rounded-2xl rounded-bl-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 leading-relaxed';
+        div.appendChild(inner);
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+        return inner;
       },
 
       async send() {
@@ -112,39 +149,87 @@
         this.busy = true;
         this.addMessage('me', q, false);
         this.input = '';
-        /* typing indicator */
         const wrap = this.$refs.messages;
+        /* typing indicator shown until first token arrives */
         const typing = document.createElement('div');
         typing.className = 'flex justify-start';
         typing.id = 'lw-typing';
         typing.innerHTML = '<div class="rounded-2xl bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs text-slate-500 italic">{% filter escapejs %}{% trans "Typing…" %}{% endfilter %}</div>';
         if (wrap) { wrap.appendChild(typing); wrap.scrollTop = wrap.scrollHeight; }
         try {
-          /* Include conversation history so the AI remembers previous turns */
           const body = {
             message: q,
             page_context: '{{ lw_chat_page_context|default:"home" }}',
             history: this.history.slice(-20),
           };
           if (appId !== null && appId !== undefined && appId !== '') body.application_id = appId;
-          const res = await fetch('/api/assistant/chat/', {
+          const res = await fetch('/api/assistant/chat/stream/', {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
               'Content-Type': 'application/json',
-              Accept: 'application/json',
               'X-CSRFToken': this.getCookie('csrftoken'),
             },
             body: JSON.stringify(body),
           });
-          const data = await res.json().catch(function () { return {}; });
-          const reply = data.reply || data.detail || data.error || ('HTTP ' + res.status);
-          const html = this.mdToHtml(String(reply));
-          if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
-          this.addMessage('ai', html, true);
-          /* Save the exchange in history (plain text, not HTML) */
+          if (!res.ok || !res.body) {
+            /* Fallback: read as JSON */
+            const data = await res.json().catch(function () { return {}; });
+            const reply = data.reply || data.detail || data.error || ('HTTP ' + res.status);
+            if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
+            this.addMessage('ai', this.mdToHtml(String(reply)), true);
+            this.history.push({ role: 'user', content: q });
+            this.history.push({ role: 'assistant', content: String(reply) });
+            return;
+          }
+          /* Streaming: read tokens via ReadableStream */
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let accumulated = '';
+          let bubble = null;
+          let buffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop(); /* keep incomplete last chunk */
+            for (const part of parts) {
+              if (!part.startsWith('data: ')) continue;
+              const payload = part.slice(6).trim();
+              if (payload === '[DONE]') break;
+              try {
+                const parsed = JSON.parse(payload);
+                if (parsed && parsed.error) {
+                  if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
+                  if (bubble) bubble.parentNode && bubble.parentNode.remove();
+                  this.addMessage('ai', '{% filter escapejs %}{% trans "Network error. Please try again." %}{% endfilter %}', false);
+                  return;
+                }
+                const token = typeof parsed === 'string' ? parsed : '';
+                if (token) {
+                  /* Remove typing indicator and create bubble on first token */
+                  if (!bubble) {
+                    if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
+                    bubble = this.createStreamBubble();
+                  }
+                  accumulated += token;
+                  if (bubble) {
+                    bubble.innerHTML = this.mdToHtml(accumulated);
+                    if (wrap) wrap.scrollTop = wrap.scrollHeight;
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+          if (!bubble) {
+            /* No tokens received at all */
+            if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
+            this.addMessage('ai', '{% filter escapejs %}{% trans "Network error. Please try again." %}{% endfilter %}', false);
+          }
+          /* Save exchange in history */
           this.history.push({ role: 'user', content: q });
-          this.history.push({ role: 'assistant', content: String(reply) });
+          this.history.push({ role: 'assistant', content: accumulated });
         } catch (e) {
           if (wrap) { const t = document.getElementById('lw-typing'); if (t) t.remove(); }
           this.addMessage('ai', '{% filter escapejs %}{% trans "Network error. Please try again." %}{% endfilter %}', false);

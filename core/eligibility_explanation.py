@@ -296,9 +296,10 @@ Réponds UNIQUEMENT en JSON valide avec les clés : "title_fr", "title_en", "adv
 Chaque <li> doit commencer par un titre court en <strong> suivi de la description. Pas de markdown, pas de texte hors du JSON."""
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=api_key)
+        from core.openai_config import get_openai_client as _get_client
+        client = _get_client()
+        if client is None:
+            return _fallback()
         model = getattr(settings, "LOANWISE_OPENAI_MODEL", "gpt-4o-mini")
         resp = client.chat.completions.create(
             model=model,

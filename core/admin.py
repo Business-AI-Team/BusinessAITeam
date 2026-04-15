@@ -130,11 +130,44 @@ class BackOfficeAdmin(admin.ModelAdmin):
 
 @admin.register(LoanApplication)
 class LoanApplicationAdmin(admin.ModelAdmin):
-    list_display = ("reference", "user", "customer", "loan_type", "status", "eligibility_score", "created_at")
-    list_filter = ("status", "loan_type")
+    list_display = (
+        "reference", "user", "customer", "loan_type", "status",
+        "eligibility_score", "eligibility_override_display", "created_at",
+    )
+    list_filter = ("status", "loan_type", "eligibility_override")
     search_fields = ("reference", "user__email", "customer__email")
-    raw_id_fields = ("user", "customer")
+    raw_id_fields = ("user", "customer", "eligibility_override_by")
     date_hierarchy = "created_at"
+    readonly_fields = ("eligibility_override_by", "eligibility_override_at")
+
+    fieldsets_override = (
+        (_("Manual eligibility override"), {
+            "classes": ("collapse",),
+            "fields": (
+                "eligibility_override",
+                "eligibility_override_by",
+                "eligibility_override_at",
+                "eligibility_override_note",
+            ),
+        }),
+    )
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        # Append override section if not already present
+        override_fields = ("eligibility_override", "eligibility_override_by", "eligibility_override_at", "eligibility_override_note")
+        for _, opts in fieldsets:
+            if any(f in opts.get("fields", ()) for f in override_fields):
+                return fieldsets
+        return list(fieldsets) + list(self.fieldsets_override)
+
+    @admin.display(description=_("Override"), boolean=False)
+    def eligibility_override_display(self, obj):
+        if obj.eligibility_override is None:
+            return "—"
+        if obj.eligibility_override:
+            return "✅ Backoffice"
+        return "❌ Backoffice"
 
 
 @admin.register(Notification)

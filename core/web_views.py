@@ -187,9 +187,18 @@ def application_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "lw_loan_type_choices": LoanType.choices,
         "lw_language_choices": Language.choices,
         "lw_portal_backoffice": app.user_id != request.user.id and can_access_all_applications(request.user),
-        "lw_applicant_email": app.user.email if app.user_id else "",
+        "lw_applicant_name": (
+            f"{app.user.first_name} {app.user.last_name}".strip() or app.user.email
+            if app.user_id else ""
+        ),
         "lw_initial_progress": application_pipeline_progress_percent(app),
         "lw_eligibility_detail": roi.get("eligibility_detail"),
+        "lw_override_by_name": (
+            f"{app.eligibility_override_by.first_name} {app.eligibility_override_by.last_name}".strip()
+            if app.eligibility_override_by_id else ""
+        ),
+        "lw_override_at": app.eligibility_override_at,
+        "lw_override_note": app.eligibility_override_note or "",
         "lw_detail_lang": lang,
         "lw_analysis_rows": analysis_rows_for_template(app),
         "matrix_script_data": matrix_script_data,

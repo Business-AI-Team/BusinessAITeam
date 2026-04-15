@@ -200,22 +200,89 @@ def build_application_pdf(application: LoanApplication, lang: str | None = None)
 
     score = application.eligibility_score
     threshold = float(detail.get("threshold") or 55.0)
-    eligible = score is not None and float(score) >= threshold
     address_blocker = bool(detail.get("address_blocker") or detail.get("identity_address_block"))
-    if address_blocker:
-        eligible = False
+
+    # Override backoffice prioritaire sur la décision IA
+    if application.eligibility_override is not None:
+        eligible = bool(application.eligibility_override)
+    else:
+        eligible = score is not None and float(score) >= threshold
+        if address_blocker:
+            eligible = False
 
     # ── Eligibility verdict ────────────────────────────────────────────────
     verdict_style = S["verdict_ok"] if eligible else S["verdict_ko"]
-    if score is not None:
+    if score is not None or application.eligibility_override is not None:
         verdict_text = ("✓ Éligible" if eligible else "✗ Non éligible") if is_fr else ("✓ Eligible" if eligible else "✗ Not eligible")
         story.append(Paragraph(verdict_text, verdict_style))
         story.append(Spacer(1, 0.15 * cm))
 
-    # Summary sentence (reason for rejection or validation)
-    summary = detail.get("summary_fr") if is_fr else detail.get("summary_en")
-    if summary:
-        story.append(Paragraph(str(summary), S["body"]))
+    # Summary sentence (reason for rejection or validation) — IA only
+    if application.eligibility_override is None:
+        summary = detail.get("summary_fr") if is_fr else detail.get("summary_en")
+        if summary:
+            story.append(Paragraph(str(summary), S["body"]))
+            story.append(Spacer(1, 0.3 * cm))
+
+    # ── Backoffice override notice ─────────────────────────────────────────
+    if application.eligibility_override is not None:
+        C_VIOLET_BG   = colors.HexColor("#ede9fe")   # violet-100
+        C_VIOLET_TEXT = colors.HexColor("#5b21b6")   # violet-800
+        override_title_style = ParagraphStyle(
+            "LW_OverrideTitle", parent=S["body"],
+            fontSize=9, fontName="Helvetica-Bold",
+            textColor=C_VIOLET_TEXT,
+        )
+        override_meta_style = ParagraphStyle(
+            "LW_OverrideMeta", parent=S["small"],
+            fontSize=8, fontName="Helvetica",
+            textColor=C_VIOLET_TEXT,
+        )
+        override_note_style = ParagraphStyle(
+            "LW_OverrideNote", parent=S["small"],
+            fontSize=8, fontName="Helvetica-Oblique",
+            textColor=C_VIOLET_TEXT,
+        )
+
+        override_by = ""
+        if application.eligibility_override_by_id:
+            u = application.eligibility_override_by
+            override_by = f"{u.first_name} {u.last_name}".strip()
+
+        override_at = ""
+        if application.eligibility_override_at:
+            override_at = application.eligibility_override_at.strftime("%d/%m/%Y %H:%M")
+
+        if is_fr:
+            title_txt = "Décision modifiée manuellement par le Backoffice"
+            by_txt    = f"Par : {override_by}" if override_by else "Par : Agent Backoffice"
+            at_txt    = f"Le : {override_at}" if override_at else ""
+            note_lbl  = "Commentaire : "
+        else:
+            title_txt = "Decision manually overridden by Backoffice"
+            by_txt    = f"By: {override_by}" if override_by else "By: Backoffice agent"
+            at_txt    = f"On: {override_at}" if override_at else ""
+            note_lbl  = "Note: "
+
+        override_box = Table([[Paragraph(title_txt, override_title_style)]], colWidths=[W])
+        override_box.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), C_VIOLET_BG),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
+        ]))
+        story.append(override_box)
+        story.append(Spacer(1, 0.1 * cm))
+        story.append(Paragraph(by_txt, override_meta_style))
+        if at_txt:
+            story.append(Paragraph(at_txt, override_meta_style))
+        if application.eligibility_override_note:
+            safe_note = (
+                str(application.eligibility_override_note)
+                .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            )
+            story.append(Paragraph(f"<b>{note_lbl}</b>{safe_note}", override_note_style))
         story.append(Spacer(1, 0.3 * cm))
 
     story.append(HRFlowable(width="100%", thickness=0.3, color=C_BORDER))

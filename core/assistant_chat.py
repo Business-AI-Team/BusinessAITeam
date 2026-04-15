@@ -17,7 +17,7 @@ from typing import Any
 from django.conf import settings
 
 from core.models import LoanApplication
-from core.openai_config import get_openai_api_key
+from core.openai_config import get_openai_api_key, get_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +51,80 @@ def _build_profile_context(user_email: str, application: LoanApplication | None,
     else:
         parts.append("Montant demandé: non renseigné")
     parts.append(f"Durée: {application.term_months} mois")
-    if application.eligibility_score is not None:
-        parts.append(f"Score d'éligibilité: {application.eligibility_score}")
+    # ── Décision IA calculée (avec raison) ──────────────────────────────────
+    roi_local = application.roi_summary or {}
+    detail_local = roi_local.get("eligibility_detail") or {}
+    score = application.eligibility_score
+    threshold_local = float(detail_local.get("threshold") or 55.0)
+    address_blocker = bool(
+        detail_local.get("address_blocker") or detail_local.get("identity_address_block")
+    )
+    if score is not None:
+        ai_eligible = float(score) >= threshold_local and not address_blocker
+        ai_decision_label = "ÉLIGIBLE" if ai_eligible else "NON ÉLIGIBLE"
+        # Raison principale du rejet IA
+        if not ai_eligible:
+            if address_blocker:
+                ai_reason = "blocage adresse : le justificatif de domicile ne correspond pas au profil"
+            else:
+                ai_reason = f"score {score} inférieur au seuil ({threshold_local:.0f}/100)"
+        else:
+            ai_reason = f"score {score} ≥ seuil ({threshold_local:.0f}/100)"
+        parts.append(
+            f"Mon évaluation initiale : {ai_decision_label} — raison principale : {ai_reason}"
+        )
     else:
-        parts.append("Score d'éligibilité: non calculé")
+        parts.append("Mon évaluation initiale : non calculée (dossier non encore analysé)")
+
+    # ── Override backoffice (décision finale) ───────────────────────────────
+    if application.eligibility_override is not None:
+        override_decision = "ÉLIGIBLE" if application.eligibility_override else "NON ÉLIGIBLE"
+        override_by_name = ""
+        if application.eligibility_override_by_id:
+            u = application.eligibility_override_by
+            override_by_name = f"{u.first_name} {u.last_name}".strip()
+        override_at_str = ""
+        if application.eligibility_override_at:
+            override_at_str = application.eligibility_override_at.strftime("%d/%m/%Y à %H:%M")
+
+        same_as_ai = (score is not None) and (
+            (application.eligibility_override and ai_eligible)
+            or (not application.eligibility_override and not ai_eligible)
+        )
+        contradiction = not same_as_ai
+
+        parts.append(
+            f"⚠️ DÉCISION FINALE BACKOFFICE : {override_decision}"
+            f"{' (contredit ma propre évaluation)' if contradiction else ' (confirme mon évaluation)'}"
+            f" — décidée par {override_by_name or 'un agent backoffice'}"
+            f"{' le ' + override_at_str if override_at_str else ''}."
+        )
+        if application.eligibility_override_note:
+            parts.append(
+                f"Raison/commentaire du backoffice : « {application.eligibility_override_note} »"
+            )
+        if contradiction:
+            parts.append(
+                f"ANALYSE DE LA CONTRADICTION :\n"
+                f"- Mon évaluation initiale était {ai_decision_label} à cause de : {ai_reason}.\n"
+                f"- Le backoffice a décidé {override_decision} pour la raison indiquée dans son commentaire.\n"
+                f"- La décision du backoffice prévaut et est la décision officielle."
+            )
+        parts.append(
+            "RÈGLES DE FORMULATION STRICTES POUR CE DOSSIER :\n"
+            "Tu es l'assistant LoanWise — tu parles à la PREMIÈRE PERSONNE. "
+            "Ne dis JAMAIS 'l'IA a décidé' ou 'la décision de l'IA' — dis 'mon évaluation', 'j'avais conclu', 'ma décision initiale'.\n"
+            "1. Annonce IMMÉDIATEMENT la décision finale du backoffice en une phrase directe.\n"
+            "2. Si elle contredit mon évaluation initiale, explique POURQUOI j'avais conclu différemment "
+            "— en citant la RAISON PRINCIPALE (blocage adresse, score insuffisant…), PAS le pourcentage brut.\n"
+            "3. Ne commence JAMAIS par 'bien que le score soit de X%' ou 'malgré un score de X%' "
+            "si le score n'est PAS la cause de la contradiction.\n"
+            "4. Cite le commentaire du backoffice EXACTEMENT tel quel, sans le paraphraser.\n"
+            "5. Structure : décision backoffice → ma raison initiale si contradiction → commentaire backoffice → "
+            "points d'action si applicable. Maximum 4 paragraphes courts."
+        )
+    else:
+        parts.append("Décision finale : mon évaluation (aucune modification par le backoffice)")
 
     roi = application.roi_summary or {}
     detail = roi.get("eligibility_detail") or {}
@@ -185,13 +255,41 @@ def _build_role_instructions(
                 "Adopte un ton technique et direct. "
                 "Tu peux répondre à toutes les questions sur notre système, nos règles, nos configurations, "
                 "les données d'un dossier, les logs ou l'architecture. "
-                "N'omets aucun détail."
+                "N'omets aucun détail.\n\n"
+                "PÉRIMÈTRE D'ACTION ADMIN dans LoanWise :\n"
+                "- Tu NE peux PAS créer de demande de prêt (action réservée aux clients uniquement).\n"
+                "- Ce que tu PEUX faire (en plus des droits backoffice) :\n"
+                "  • Accéder au panneau d'administration Django (gestion des utilisateurs, sources RAG, guides)\n"
+                "  • Configurer les sources de connaissances (EligibilityKnowledgeSource) et les guides d'assistant\n"
+                "  • Gérer les utilisateurs (clients, backoffice, admins)\n"
+                "  • Consulter et modifier toutes les demandes de prêt\n"
+                "  • Accéder aux logs et à la configuration système\n"
+                "  • Consulter le tableau de bord des demandes, ouvrir les dossiers, lire les analyses IA\n"
+                "  • Appliquer une décision manuelle d'éligibilité (override backoffice)\n"
+                "  • Consulter et ouvrir les documents fournis par les clients\n"
+                "Si l'administrateur demande comment utiliser l'application, explique ces actions admin. "
+                "Si l'administrateur insiste sur l'utilisation globale (tous acteurs), explique toutes les "
+                "fonctionnalités en précisant l'acteur concerné : CLIENT, BACKOFFICE ou ADMIN."
             )
         return (
             "You are currently speaking with an ADMINISTRATOR of our LoanWise application (superuser). "
             "Be direct and technically precise. "
             "Answer any questions about our system, our rules, our configurations, application data, logs, or architecture. "
-            "Omit nothing."
+            "Omit nothing.\n\n"
+            "ADMIN SCOPE OF ACTION in LoanWise:\n"
+            "- You CANNOT create loan applications (this action is reserved for customers only).\n"
+            "- What you CAN do (in addition to backoffice rights):\n"
+            "  • Access the Django admin panel (user management, RAG sources, assistant guides)\n"
+            "  • Configure knowledge sources (EligibilityKnowledgeSource) and assistant guides\n"
+            "  • Manage users (customers, backoffice agents, admins)\n"
+            "  • View and edit all loan applications\n"
+            "  • Access logs and system configuration\n"
+            "  • View the application dashboard, open files, read AI analyses\n"
+            "  • Apply a manual eligibility decision (backoffice override)\n"
+            "  • View and open documents submitted by customers\n"
+            "If the administrator asks how to use the application, explain these admin actions. "
+            "If they insist on a global overview (all actors), explain all features labelling each "
+            "actor: CUSTOMER, BACKOFFICE or ADMIN."
         )
     if actor_role == "backoffice":
         if is_fr:
@@ -201,7 +299,18 @@ def _build_role_instructions(
                 "Adopte un ton professionnel et analytique. "
                 "Tu peux fournir des détails techniques complets (scores, ratios, incohérences de documents, nos règles internes). "
                 "Aide l'agent à comprendre pourquoi notre décision est favorable ou défavorable sur ce dossier, "
-                "et quelles actions notre équipe peut entreprendre (demande de pièces complémentaires, validation manuelle, etc.)."
+                "et quelles actions notre équipe peut entreprendre (demande de pièces complémentaires, validation manuelle, etc.).\n\n"
+                "PÉRIMÈTRE D'ACTION BACKOFFICE dans LoanWise :\n"
+                "- Tu NE peux PAS créer de demande de prêt (action réservée aux clients uniquement).\n"
+                "- Ce que tu PEUX faire :\n"
+                "  • Consulter le tableau de bord des demandes (liste de tous les dossiers clients)\n"
+                "  • Ouvrir un dossier et lire l'analyse IA (score, incohérences, détails financiers)\n"
+                "  • Appliquer une décision manuelle d'éligibilité (valider ou rejeter manuellement via l'override)\n"
+                "  • Consulter et ouvrir les documents fournis par les clients\n"
+                "  • Utiliser cet assistant pour analyser un dossier en profondeur\n"
+                "Si l'agent te demande comment utiliser l'application, explique ces actions backoffice. "
+                "Si l'agent insiste sur l'utilisation globale (tous acteurs), explique toutes les fonctionnalités "
+                "en précisant l'acteur concerné : CLIENT, BACKOFFICE ou ADMIN."
             )
         return (
             "You are currently speaking with a BACKOFFICE agent — a colleague at our banking institution. "
@@ -209,7 +318,18 @@ def _build_role_instructions(
             "Use a professional and analytical tone. "
             "Provide full technical details (scores, ratios, document inconsistencies, our internal rules). "
             "Help the agent understand why our decision is favourable or unfavourable on this application, "
-            "and what actions our team can take (request additional documents, manual validation, etc.)."
+            "and what actions our team can take (request additional documents, manual validation, etc.).\n\n"
+            "BACKOFFICE SCOPE OF ACTION in LoanWise:\n"
+            "- You CANNOT create loan applications (this action is reserved for customers only).\n"
+            "- What you CAN do:\n"
+            "  • View the application dashboard (list of all customer files)\n"
+            "  • Open a file and read the AI analysis (score, inconsistencies, financial details)\n"
+            "  • Apply a manual eligibility decision (manually validate or reject via override)\n"
+            "  • View and open documents submitted by customers\n"
+            "  • Use this assistant to analyse a file in depth\n"
+            "If the agent asks how to use the application, explain these backoffice actions. "
+            "If the agent insists on a global overview (all actors), explain all features labelling each "
+            "actor: CUSTOMER, BACKOFFICE or ADMIN."
         )
     # customer / default
     if is_fr:
@@ -218,14 +338,20 @@ def _build_role_instructions(
             "Adopte un ton bienveillant, clair et pédagogique. "
             "Explique nos décisions en termes simples, sans jargon technique excessif. "
             "Guide le client sur ce qu'il peut faire pour améliorer son dossier auprès de notre institution. "
-            "Ne divulgue pas de détails internes réservés au backoffice (règles de scoring internes, seuils bruts, etc.)."
+            "Ne divulgue pas de détails internes réservés au backoffice (règles de scoring internes, seuils bruts, etc.).\n\n"
+            "Si le client pose une question générale sur l'utilisation de l'application, "
+            "guide-le sur les étapes client : créer une demande, téléverser les documents requis "
+            "(pièce d'identité, justificatif de domicile, bulletins de salaire), lancer l'analyse et consulter les résultats."
         )
     return (
         f"You are currently speaking with « {customer_name} », the CUSTOMER who owns this loan application. "
         "Use a warm, clear, and educational tone. "
         "Explain our decisions in simple terms, avoiding excessive technical jargon. "
         "Guide the customer on how to improve their application with our institution. "
-        "Do not disclose internal backoffice details (raw scoring rules, internal thresholds, etc.)."
+        "Do not disclose internal backoffice details (raw scoring rules, internal thresholds, etc.).\n\n"
+        "If the customer asks a general question about how to use the application, "
+        "guide them through the customer steps: create an application, upload the required documents "
+        "(ID card, proof of address, pay slips), launch the analysis and review the results."
     )
 
 
@@ -383,8 +509,8 @@ def build_assistant_reply(
     actor_user: objet User Django de l'utilisateur connecté (optionnel, enrichit le prompt).
     page_context: identifiant de la page courante (home, dashboard, application_detail, …).
     """
-    api_key = get_openai_api_key()
-    if not api_key:
+    client = get_openai_client()
+    if client is None:
         return {"error": "no_api_key"}
 
     lang = (language or "fr").lower()
@@ -399,9 +525,6 @@ def build_assistant_reply(
     )
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=api_key)
         model = getattr(settings, "LOANWISE_OPENAI_MODEL", "gpt-4o-mini")
 
         safe_history: list[dict] = []
@@ -428,3 +551,70 @@ def build_assistant_reply(
     except Exception as e:
         logger.warning("assistant chat failed: %s", e)
         return {"error": str(e)}
+
+
+def stream_assistant_reply(
+    *,
+    user_message: str,
+    language: str,
+    user_email: str,
+    application,
+    actor_role: str = "customer",
+    actor_user=None,
+    page_context: str = "home",
+    history: list[dict] | None = None,
+):
+    """Générateur SSE : yield chaque token OpenAI au format ``data: <json>\\n\\n``.
+
+    Utilisé par ``AssistantChatStreamView`` via ``StreamingHttpResponse``.
+    Le dernier événement est ``data: [DONE]\\n\\n``.
+    En cas d'erreur, yield un événement ``data: {"error": "..."}\\n\\n``.
+    """
+    import json as _json
+
+    client = get_openai_client()
+    if client is None:
+        yield f'data: {_json.dumps({"error": "no_api_key"})}\n\n'
+        return
+
+    lang = (language or "fr").lower()
+    system_prompt = _build_system_prompt(
+        lang=lang,
+        actor_role=actor_role,
+        application=application,
+        user_email=user_email,
+        user_message=user_message,
+        page_context=page_context,
+        actor_user=actor_user,
+    )
+
+    safe_history: list[dict] = []
+    for turn in (history or [])[-20:]:
+        role = turn.get("role", "")
+        content = (turn.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            safe_history.append({"role": role, "content": content})
+
+    messages = (
+        [{"role": "system", "content": system_prompt}]
+        + safe_history
+        + [{"role": "user", "content": user_message.strip()}]
+    )
+
+    try:
+        model = getattr(settings, "LOANWISE_OPENAI_MODEL", "gpt-4o-mini")
+        stream = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=1200,
+            temperature=0.3,
+            stream=True,
+        )
+        for chunk in stream:
+            token = (chunk.choices[0].delta.content or "") if chunk.choices else ""
+            if token:
+                yield f"data: {_json.dumps(token)}\n\n"
+        yield "data: [DONE]\n\n"
+    except Exception as e:
+        logger.warning("assistant stream failed: %s", e)
+        yield f'data: {_json.dumps({"error": str(e)})}\n\n'

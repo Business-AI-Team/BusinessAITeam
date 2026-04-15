@@ -260,6 +260,33 @@ class LoanApplication(models.Model):
         blank=True,
         help_text=_("Optional target decision or offer expiry date (ERD)."),
     )
+    # ── Manual eligibility override (backoffice / admin) ─────────────────────
+    eligibility_override = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=_(
+            "Manual eligibility decision by backoffice/admin. "
+            "None = AI decision, True = force eligible, False = force rejected."
+        ),
+    )
+    eligibility_override_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="eligibility_overrides",
+        help_text=_("User who applied the manual override."),
+    )
+    eligibility_override_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("When the manual override was applied."),
+    )
+    eligibility_override_note = models.TextField(
+        blank=True,
+        help_text=_("Optional reason or comment for the override."),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
@@ -339,9 +366,13 @@ class LoanApplication(models.Model):
     def is_eligible(self) -> bool | None:
         """
         None  = score pas encore calculé.
-        True  = éligible (score ≥ seuil et pas de blocage).
-        False = non éligible.
+        True  = éligible (score ≥ seuil et pas de blocage, ou override backoffice).
+        False = non éligible (score insuffisant/blocage, ou override backoffice).
+
+        L'override backoffice/admin est prioritaire sur la décision IA.
         """
+        if self.eligibility_override is not None:
+            return self.eligibility_override
         if self.eligibility_score is None:
             return None
         detail = (self.roi_summary or {}).get("eligibility_detail") or {}

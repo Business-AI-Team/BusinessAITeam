@@ -19,7 +19,7 @@ ALLOWED_HOSTS = [
     h.strip()
     for h in os.environ.get(
         "DJANGO_ALLOWED_HOSTS",
-        "192.168.1.218,127.0.0.1,localhost",
+        "192.168.1.218,127.0.0.1,localhost,.ngrok-free.app,.ngrok-free.dev,.ngrok.io",
     ).split(",")
     if h.strip()
 ]
@@ -34,6 +34,9 @@ elif DEBUG:
         "http://127.0.0.1:8000",
         "http://localhost:8000",
         "http://192.168.1.218:8000",
+        "https://*.ngrok-free.app",
+        "https://*.ngrok-free.dev",
+        "https://*.ngrok.io",
     ]
 else:
     CSRF_TRUSTED_ORIGINS = []
@@ -178,7 +181,7 @@ LOANWISE_FX_MGA_PER_EUR = float(os.environ.get("LOANWISE_FX_MGA_PER_EUR", "4700"
 LOANWISE_FX_MUR_PER_EUR = float(os.environ.get("LOANWISE_FX_MUR_PER_EUR", "49"))
 LOANWISE_INTEREST_RATE_ANNUAL = float(os.environ.get("LOANWISE_INTEREST_RATE_ANNUAL", "0.05"))
 LOANWISE_APPROVAL_THRESHOLD = float(os.environ.get("LOANWISE_APPROVAL_THRESHOLD", "55"))
-LOANWISE_DELETE_FILES_AFTER_ANALYSIS = os.environ.get("LOANWISE_DELETE_FILES_AFTER_ANALYSIS", "true").lower() in (
+LOANWISE_DELETE_FILES_AFTER_ANALYSIS = os.environ.get("LOANWISE_DELETE_FILES_AFTER_ANALYSIS", "false").lower() in (
     "1",
     "true",
     "yes",

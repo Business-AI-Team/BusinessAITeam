@@ -72,7 +72,7 @@ def seed_default_requirements() -> int:
     defaults = [
         {
             "code": "identity_card",
-            "label_fr": "CNI / Passeport",
+            "label_fr": "CIN / Passeport",
             "label_en": "ID card / Passport",
             "description_fr": "Carte nationale d'identité ou passeport valide.",
             "description_en": "Valid national ID card or passport.",
