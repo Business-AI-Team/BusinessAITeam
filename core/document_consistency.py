@@ -87,16 +87,20 @@ def _pay_period_year_month(ef: dict[str, Any]) -> str | None:
     return None
 
 
-def _rolling_month_keys(count: int) -> set[str]:
-    """Les ``count`` derniers mois calendaires (étiquette YYYY-MM), mois courant inclus."""
-    y, m = date.today().year, date.today().month
+def _rolling_month_keys(count: int, reference_date=None) -> set[str]:
+    """Les ``count`` derniers mois calendaires avant ``reference_date`` (ou aujourd'hui si None)."""
+    from datetime import date as _date
+    ref = reference_date or _date.today()
+    if hasattr(ref, "date"):
+        ref = ref.date()
+    y, m = ref.year, ref.month
     out: set[str] = set()
     for _ in range(max(1, count)):
-        out.add(f"{y:04d}-{m:02d}")
         m -= 1
         if m == 0:
             m = 12
             y -= 1
+        out.add(f"{y:04d}-{m:02d}")
     return out
 
 
@@ -204,14 +208,27 @@ def _fallback_income_from_summary(summary: str) -> Decimal | None:
 
 
 def _check_payslip_month_rules(application: LoanApplication) -> list[dict[str, Any]]:
-    """Vérifie des bulletins sur N mois distincts récents (config par DocumentRequirement)."""
+    """
+    Vérifie :
+    1. Tous les bulletins sont dans la fenêtre des 3 derniers mois avant la création de la demande.
+    2. Pas de mois dupliqués (deux bulletins du même mois = redondance).
+
+    La fenêtre est calculée à partir de ``application.created_at`` (date de soumission du dossier),
+    pas de ``date.today()``, pour éviter que les mois valides ne glissent pendant l'instruction.
+    """
     from core.document_requirement_service import requirements_for_application
 
+    DEFAULT_WINDOW = 3
+    reference_date = getattr(application, "created_at", None)
     out: list[dict[str, Any]] = []
+
+    # ── Collecte des bulletins par requirement configuré ──────────────────────
+    req_handled: set[int] = set()
     for req in requirements_for_application(application):
         w = getattr(req, "payslip_distinct_months_window", None)
-        if not w or w < 2:
+        if not w or w < 1:
             continue
+        req_handled.add(req.pk)
         min_f = max(1, getattr(req, "min_files", 1) or 1)
         docs = [
             d
@@ -220,67 +237,231 @@ def _check_payslip_month_rules(application: LoanApplication) -> list[dict[str, A
         ]
         if len(docs) < min_f:
             continue
-        yms: list[str] = []
-        missing = 0
-        for d in docs:
-            ar = d.analysis_result or {}
-            cap = ar.get("caption") or ""
-            parsed = _parse_caption_json(cap)
-            ef = _get_extracted_fields(parsed)
-            ym = _pay_period_year_month(ef)
-            if ym:
-                yms.append(ym)
-            else:
-                missing += 1
-        allowed = _rolling_month_keys(w)
-        distinct = set(yms)
-        if missing > 0 or len(yms) < min_f:
-            out.append(
-                {
-                    "code": "payslip_dates_incomplete",
-                    "severity": "medium",
-                    "detail_fr": (
-                        f"Les dates de période (bulletins « {req.code} ») ne sont pas toutes lisibles pour vérifier "
-                        f"les {w} derniers mois distincts."
-                    ),
-                    "detail_en": (
-                        f"Payslip period dates are missing on some uploads for « {req.code} »; "
-                        f"cannot verify {w} distinct recent months."
-                    ),
-                }
-            )
+        out.extend(_validate_payslip_docs(docs, w, min_f, label=req.code, reference_date=reference_date))
+
+    # ── Fallback : bulletins sans requirement configuré (fenêtre 3 mois) ──────
+    all_payslip_docs = [
+        d
+        for d in application.documents.all().order_by("id")
+        if d.deleted_at is None
+        and (d.requirement_id is None or d.requirement_id not in req_handled)
+        and _is_income_document(
+            _get_doc_type_from_analysis(d),
+            _get_summary_from_analysis(d),
+        )
+    ]
+    if all_payslip_docs:
+        out.extend(_validate_payslip_docs(all_payslip_docs, DEFAULT_WINDOW, 1, label="payslip", reference_date=reference_date))
+
+    return out
+
+
+def _get_doc_type_from_analysis(doc: Any) -> str:
+    ar = doc.analysis_result or {}
+    cap = ar.get("caption") or ""
+    parsed = _parse_caption_json(cap)
+    return (parsed.get("document_type") or "").strip()
+
+
+def _get_summary_from_analysis(doc: Any) -> str:
+    ar = doc.analysis_result or {}
+    cap = ar.get("caption") or ""
+    parsed = _parse_caption_json(cap)
+    return (parsed.get("visible_text_summary") or "").strip()
+
+
+def _validate_payslip_docs(
+    docs: list[Any],
+    window: int,
+    min_distinct: int,
+    label: str,
+    reference_date=None,
+) -> list[dict[str, Any]]:
+    """Vérifie la fenêtre temporelle et l'unicité des mois pour une liste de bulletins.
+
+    ``reference_date`` : date de création de la demande (datetime ou date).
+    Les mois autorisés sont les ``window`` mois PRÉCÉDANT cette date.
+    """
+    out: list[dict[str, Any]] = []
+    allowed = _rolling_month_keys(window, reference_date)
+    yms: list[str] = []
+    missing_date = 0
+
+    for d in docs:
+        ar = d.analysis_result or {}
+        if ar.get("skipped") or (ar.get("engine") or "") == "fallback":
             continue
-        if len(distinct) < min_f or len(yms) != len(distinct):
-            out.append(
-                {
-                    "code": "payslip_months_not_distinct",
-                    "severity": "high",
-                    "detail_fr": (
-                        f"Les bulletins ({req.code}) doivent couvrir {min_f} mois calendaires distincts ; "
-                        f"périodes détectées : {', '.join(sorted(distinct))}."
-                    ),
-                    "detail_en": (
-                        f"Payslips ({req.code}) must cover {min_f} distinct calendar months; "
-                        f"detected periods: {', '.join(sorted(distinct))}."
-                    ),
-                }
-            )
+        cap = ar.get("caption") or ""
+        parsed = _parse_caption_json(cap)
+        ef = _get_extracted_fields(parsed)
+        ym = _pay_period_year_month(ef)
+        if ym:
+            yms.append(ym)
+        else:
+            missing_date += 1
+
+    if not yms and missing_date == 0:
+        return out
+
+    if missing_date > 0:
+        out.append({
+            "code": "payslip_dates_incomplete",
+            "severity": "medium",
+            "detail_fr": (
+                f"Les dates de période de certains bulletins ({label}) sont illisibles ou absentes. "
+                f"La période doit être dans les {window} derniers mois calendaires."
+            ),
+            "detail_en": (
+                f"Payslip period dates are missing or unreadable for some uploads ({label}). "
+                f"The period must fall within the last {window} calendar months."
+            ),
+        })
+
+    if not yms:
+        return out
+
+    distinct = set(yms)
+
+    # Doublons (même mois, plusieurs fichiers)
+    if len(yms) != len(distinct):
+        duplicates = sorted(ym for ym in distinct if yms.count(ym) > 1)
+        out.append({
+            "code": "payslip_months_not_distinct",
+            "severity": "high",
+            "detail_fr": (
+                f"Plusieurs bulletins ({label}) couvrent le même mois calendaire. "
+                f"Chaque mois doit être représenté une seule fois. "
+                f"Mois en doublon : {', '.join(duplicates)}."
+            ),
+            "detail_en": (
+                f"Multiple payslips ({label}) cover the same calendar month. "
+                f"Each month must appear only once. "
+                f"Duplicate months: {', '.join(duplicates)}."
+            ),
+        })
+
+    # Mois hors fenêtre glissante
+    outside = sorted(distinct - allowed)
+    if outside:
+        out.append({
+            "code": "payslip_months_outside_window",
+            "severity": "high",
+            "detail_fr": (
+                f"Un ou plusieurs bulletins ({label}) sont hors des {window} derniers mois autorisés "
+                f"({', '.join(sorted(allowed))}). "
+                f"Mois hors fenêtre : {', '.join(outside)}."
+            ),
+            "detail_en": (
+                f"One or more payslips ({label}) fall outside the last {window} authorized months "
+                f"({', '.join(sorted(allowed))}). "
+                f"Out-of-window months: {', '.join(outside)}."
+            ),
+        })
+
+    return out
+
+
+def _name_tokens(s: str) -> set[str]:
+    """Tokenise un nom en minuscules, mots >= 2 caractères."""
+    s = re.sub(r"\s+", " ", (s or "").lower().strip())
+    s = re.sub(r"[^\w\s]", " ", s, flags=re.UNICODE)
+    return {w for w in s.split() if len(w) >= 2}
+
+
+def _check_identity_name_match(application: LoanApplication) -> list[dict[str, Any]]:
+    """
+    Compare le nom extrait sur les CIN/passeports et les bulletins de salaire
+    avec le nom déclaré dans le profil client. Génère une issue si trop différent.
+    """
+    cust = getattr(application, "customer", None)
+    if cust is None:
+        return []
+    declared = f"{getattr(cust, 'first_name', '') or ''} {getattr(cust, 'last_name', '') or ''}".strip()
+    if not declared:
+        return []
+
+    declared_tokens = _name_tokens(declared)
+    if not declared_tokens:
+        return []
+
+    out: list[dict[str, Any]] = []
+    checked_id = False
+    checked_payslip = False
+
+    for doc in application.documents.all().order_by("id"):
+        ar = doc.analysis_result or {}
+        if ar.get("skipped") or (ar.get("engine") or "") == "fallback":
             continue
-        if not distinct <= allowed:
-            out.append(
-                {
-                    "code": "payslip_months_outside_window",
+        cap = ar.get("caption") or ""
+        parsed = _parse_caption_json(cap)
+        if not parsed:
+            continue
+        ef = _get_extracted_fields(parsed)
+        doc_type = (parsed.get("document_type") or "").strip()
+        dk = getattr(doc, "kind", None) or ""
+
+        is_id = _doc_is_national_id_cin(doc_type, dk)
+        is_payslip = _is_income_document(doc_type, (parsed.get("visible_text_summary") or ""))
+
+        # Préférer les champs spécialisés, puis le générique
+        name_on_doc: str | None = None
+        if is_id:
+            name_on_doc = (ef.get("id_holder_name") or ef.get("person_full_name") or "").strip() or None
+        elif is_payslip:
+            name_on_doc = (ef.get("payslip_employee_name") or ef.get("person_full_name") or "").strip() or None
+
+        if not name_on_doc or len(name_on_doc) < 3:
+            continue
+
+        doc_tokens = _name_tokens(name_on_doc)
+        if not doc_tokens:
+            continue
+
+        inter = len(declared_tokens & doc_tokens)
+        union = len(declared_tokens | doc_tokens)
+        overlap = inter / union if union else 0.0
+
+        if overlap < 0.4:
+            fname = doc.original_filename or str(doc.pk)
+            if is_id and not checked_id:
+                checked_id = True
+                out.append({
+                    "code": "identity_name_mismatch",
                     "severity": "high",
+                    "document_filename": fname,
+                    "declared_name": declared,
+                    "detected_name": name_on_doc,
                     "detail_fr": (
-                        f"Un ou plusieurs bulletins ne correspondent pas aux {w} derniers mois calendaires autorisés "
-                        f"({', '.join(sorted(allowed))})."
+                        f"Le nom sur la pièce d'identité ({name_on_doc!r}, fichier : {fname}) "
+                        f"ne correspond pas au nom déclaré dans le profil ({declared!r}). "
+                        "Vérifiez que la pièce d'identité appartient bien au demandeur."
                     ),
                     "detail_en": (
-                        f"One or more payslips fall outside the last {w} calendar months "
-                        f"({', '.join(sorted(allowed))})."
+                        f"The name on the identity document ({name_on_doc!r}, file: {fname}) "
+                        f"does not match the declared profile name ({declared!r}). "
+                        "Please ensure the ID belongs to the loan applicant."
                     ),
-                }
-            )
+                })
+            elif is_payslip and not checked_payslip:
+                checked_payslip = True
+                out.append({
+                    "code": "payslip_name_mismatch",
+                    "severity": "high",
+                    "document_filename": fname,
+                    "declared_name": declared,
+                    "detected_name": name_on_doc,
+                    "detail_fr": (
+                        f"Le nom du salarié sur le bulletin de salaire ({name_on_doc!r}, fichier : {fname}) "
+                        f"ne correspond pas au nom déclaré dans le profil ({declared!r}). "
+                        "Vérifiez que le bulletin appartient bien au demandeur."
+                    ),
+                    "detail_en": (
+                        f"The employee name on the payslip ({name_on_doc!r}, file: {fname}) "
+                        f"does not match the declared profile name ({declared!r}). "
+                        "Please ensure the payslip belongs to the loan applicant."
+                    ),
+                })
+
     return out
 
 
@@ -343,10 +524,13 @@ def check_application_document_consistency(application: LoanApplication) -> dict
 
     issues: list[dict[str, Any]] = []
     issues.extend(_check_payslip_month_rules(application))
+    issues.extend(_check_identity_name_match(application))
     penalty = Decimal("0")
     penalty += Decimal("12") * sum(1 for i in issues if i.get("code") == "payslip_months_not_distinct")
     penalty += Decimal("10") * sum(1 for i in issues if i.get("code") == "payslip_months_outside_window")
     penalty += Decimal("6") * sum(1 for i in issues if i.get("code") == "payslip_dates_incomplete")
+    penalty += Decimal("20") * sum(1 for i in issues if i.get("code") == "identity_name_mismatch")
+    penalty += Decimal("15") * sum(1 for i in issues if i.get("code") == "payslip_name_mismatch")
 
     best_detected_annual: Decimal | None = None
     best_doc_name = ""

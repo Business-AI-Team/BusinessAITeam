@@ -5,6 +5,7 @@ REST API views (API-first). Web UI consumes the same endpoints where relevant.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from django.conf import settings
 from django.db import IntegrityError
@@ -20,9 +21,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.document_requirement_service import label_for, seed_default_requirements
+from core.document_requirement_service import (
+    document_counts_by_requirement_code,
+    label_for,
+    missing_required_codes,
+    seed_default_requirements,
+)
 from core.lang_utils import resolve_language
-from core.loan_orchestrator_agent import run_orchestration
+from core.loan_orchestrator_agent import run_orchestration, run_orchestration_by_pk
 from core.portal import can_access_all_applications
 from core.models import (
     ApplicationDocument,
@@ -46,6 +52,9 @@ from core.serializers import (
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+# Thread pool for background eligibility analysis (max 4 concurrent analyses).
+_orchestration_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="lw-orchestration")
 
 
 class RegisterView(APIView):
@@ -189,45 +198,37 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def orchestrate(self, request, pk=None):
         app = self.get_object()
-        try:
-            app = run_orchestration(app)
-        except Exception as e:
-            logger.exception("Orchestration failed for application %s", app.pk)
-            payload = {
-                "detail": _("Analysis failed. Please check your data and try again."),
-                "code": "orchestration_failed",
-            }
-            if settings.DEBUG:
-                payload["exception"] = type(e).__name__
-                payload["message"] = str(e)
-            return Response(payload, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        app.refresh_from_db()
-        steps = app.orchestration_log or []
-        last = steps[-1] if steps else {}
-        step_name = last.get("step")
-        lang = app.language or "fr"
-        missing_codes: list[str] = []
-        if step_name == "blocked":
-            missing_codes = list(last.get("detail", {}).get("missing_documents") or [])
-        missing_labels: list[str] = []
-        for code in missing_codes:
-            req = DocumentRequirement.objects.filter(code=code).first()
-            missing_labels.append(label_for(req, lang) if req else code)
+        # Synchronous pre-check: return blocked immediately if required documents are missing.
+        # This preserves the existing UX (alert with list of missing docs) without a background round-trip.
+        counts = document_counts_by_requirement_code(app)
+        missing = missing_required_codes(app, counts)
+        if missing:
+            lang = app.language or "fr"
+            missing_labels = [
+                label_for(DocumentRequirement.objects.filter(code=c).first(), lang) or c
+                for c in missing
+            ]
+            return Response({
+                "pipeline": {
+                    "completed": False,
+                    "blocked": True,
+                    "missing_documents": list(missing),
+                    "missing_document_labels": missing_labels,
+                    "last_step": "blocked",
+                },
+            })
 
-        pipeline = {
-            "completed": step_name == "complete",
-            "blocked": step_name == "blocked",
-            "missing_documents": missing_codes,
-            "missing_document_labels": missing_labels,
-            "last_step": step_name,
-        }
-        return Response(
-            {
-                "application": LoanApplicationSerializer(app).data,
-                "pipeline": pipeline,
-            }
-        )
+        # All documents present — set IN_PROGRESS immediately and launch analysis in background.
+        app.status = LoanApplicationStatus.IN_PROGRESS
+        app.save(update_fields=["status", "updated_at"])
+        _orchestration_pool.submit(run_orchestration_by_pk, app.pk)
+        return Response({
+            "queued": True,
+            "status": app.status,
+            "pipeline": {"queued": True, "blocked": False, "completed": False},
+            "application": LoanApplicationSerializer(app).data,
+        })
 
     @action(detail=True, methods=["get"])
     def export_pdf(self, request, pk=None):

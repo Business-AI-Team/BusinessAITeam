@@ -21,6 +21,18 @@
       </p>
     </div>
     <div class="flex-shrink-0">
+      <!-- Pending badge: shown while background analysis is running (Alpine.js reactive) -->
+      <div x-show="analyzing" x-cloak
+           class="flex flex-col items-center gap-1 rounded-2xl bg-sky-50 px-6 py-4 shadow-md ring-2 ring-sky-400/60 dark:bg-sky-950/50 dark:ring-sky-500/50">
+        <svg class="h-8 w-8 animate-spin text-sky-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+        </svg>
+        <span class="text-lg font-bold text-sky-700 dark:text-sky-300">{% trans "Analyse en cours…" %}</span>
+        <span class="text-xs text-sky-500 dark:text-sky-400">{% trans "Résultat disponible dans quelques instants" %}</span>
+      </div>
+      <!-- Static server-rendered badge (eligible / not eligible / not yet analysed) -->
+      <div x-show="!analyzing">
       {% if lw_eligibility_detail and not lw_eligibility_detail.error %}
         {% if lw_eligibility_detail.decision == 'validated' %}
         <div class="flex flex-col items-center gap-1 rounded-2xl bg-emerald-50 px-6 py-4 shadow-md ring-2 ring-emerald-400/60 dark:bg-emerald-950/50 dark:ring-emerald-500/50">
@@ -46,55 +58,18 @@
         <span class="text-xs text-slate-400 dark:text-slate-500">{% trans "Dossier non analysé" %}</span>
       </div>
       {% endif %}
+      </div>
     </div>
-  </div>
-
-  {# RAG eligibility section — loaded asynchronously to avoid blocking page render #}
-  <div x-data="ragGuidance({{ application.id }})" x-init="load()">
-    <template x-if="loading">
-      <div class="animate-fade-in-up flex items-center gap-3 rounded-2xl border border-emerald-200/50 bg-emerald-50/60 p-5 text-sm text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/20 dark:text-emerald-300">
-        <svg class="h-4 w-4 animate-spin shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-        </svg>
-        {% trans "Loading eligibility guidance…" %}
-      </div>
-    </template>
-    <template x-if="!loading && available">
-      <div class="animate-fade-in-up rounded-2xl border border-emerald-200/80 bg-emerald-50/90 p-5 dark:border-emerald-800/60 dark:bg-emerald-950/35">
-        <h2 class="text-lg font-semibold text-emerald-950 dark:text-emerald-100">{% trans "Indicative eligibility (from policy documents)" %}</h2>
-        <p class="mt-1 text-xs text-emerald-800/90 dark:text-emerald-200/80">
-          {% trans "Ranges below come from documents uploaded by your administrator. They are not a guarantee of approval." %}
-        </p>
-        <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Amount range" %}</dt>
-            <dd class="mt-0.5 font-semibold tabular-nums text-emerald-950 dark:text-emerald-50">
-              <span x-text="minAmount !== null && maxAmount !== null ? (fmtNum(minAmount) + ' – ' + fmtNum(maxAmount) + ' ' + (currency || '')) : '—'"></span>
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-emerald-800/80 dark:text-emerald-300/80">{% trans "Repayment terms (months)" %}</dt>
-            <dd class="mt-0.5 font-semibold text-emerald-950 dark:text-emerald-50">
-              <span x-text="termMonths.length ? termMonths.join(', ') : '—'"></span>
-            </dd>
-          </div>
-        </dl>
-        <template x-if="summary">
-          <p class="mt-3 text-sm leading-relaxed text-emerald-900/90 dark:text-emerald-100/90" x-text="summary"></p>
-        </template>
-      </div>
-    </template>
   </div>
 
   {% if not lw_portal_backoffice and lw_eligibility_detail and not lw_eligibility_detail.error and lw_eligibility_detail.has_doc_issues %}
   <div class="animate-fade-in-up rounded-2xl border border-rose-300/90 bg-rose-50/95 p-4 text-sm text-rose-950 shadow-sm dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-100">
     {% if lw_detail_lang|slice:':2' == 'fr' %}
       <p class="font-semibold">{% if lw_eligibility_detail.user_advice_title_fr %}{{ lw_eligibility_detail.user_advice_title_fr }}{% else %}{% trans "Action required: document inconsistency" %}{% endif %}</p>
-      <p class="mt-2 leading-relaxed">{{ lw_eligibility_detail.user_advice_fr }}</p>
+      <div class="mt-2 leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_li]:leading-snug">{{ lw_eligibility_detail.user_advice_fr|safe }}</div>
     {% else %}
       <p class="font-semibold">{% if lw_eligibility_detail.user_advice_title_en %}{{ lw_eligibility_detail.user_advice_title_en }}{% else %}{% trans "Action required: document inconsistency" %}{% endif %}</p>
-      <p class="mt-2 leading-relaxed">{{ lw_eligibility_detail.user_advice_en }}</p>
+      <div class="mt-2 leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_li]:leading-snug">{{ lw_eligibility_detail.user_advice_en|safe }}</div>
     {% endif %}
   </div>
   {% endif %}
@@ -389,40 +364,6 @@
 {% block extra_js %}
 <script src="{% static 'js/loanwise_file_upload.js' %}"></script>
 <script>
-  function ragGuidance(appId) {
-    return {
-      appId,
-      loading: true,
-      available: false,
-      currency: null,
-      minAmount: null,
-      maxAmount: null,
-      termMonths: [],
-      summary: '',
-      async load() {
-        try {
-          const res = await fetch('/api/applications/' + appId + '/rag_guidance/', {
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
-          });
-          if (res.ok) {
-            const d = await res.json();
-            this.available = !!d.available;
-            this.currency = d.currency || null;
-            this.minAmount = d.min_amount != null ? Number(d.min_amount) : null;
-            this.maxAmount = d.max_amount != null ? Number(d.max_amount) : null;
-            this.termMonths = d.term_months_options || [];
-            this.summary = d.summary || '';
-          }
-        } catch (e) {}
-        finally { this.loading = false; }
-      },
-      fmtNum(n) {
-        if (n == null) return '—';
-        return Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
-      },
-    };
-  }
 
   function appDocuments(appId) {
     return {
@@ -495,6 +436,8 @@
       csrf: '',
       busy: false,
       progressPct: ip,
+      analyzing: '{{ application.status|escapejs }}' === 'in_progress',
+      _pollTimer: null,
       statusLabel: '{{ application.get_status_display|escapejs }}',
       progressHint: '{% filter escapejs %}{% trans "Renseignez le montant, la devise, la durée et fournissez tous les documents requis pour que votre dossier soit complet." %}{% endfilter %}',
       getCookie(name) {
@@ -537,6 +480,27 @@
             uploaded: typeof s.uploaded === 'number' ? s.uploaded : 0,
           };
         });
+        if (this.analyzing) { this.startStatusPolling(); }
+      },
+      startStatusPolling() {
+        if (this._pollTimer) return;
+        const self = this;
+        self._pollTimer = setInterval(async function () {
+          try {
+            const r = await fetch('/api/applications/' + self.appId + '/', {
+              headers: { Accept: 'application/json' },
+              credentials: 'same-origin',
+            });
+            if (!r.ok) return;
+            const d = await r.json();
+            const st = (d.status || '').toLowerCase();
+            if (st !== 'pending' && st !== 'in_progress' && st !== 'under_review') {
+              clearInterval(self._pollTimer);
+              self._pollTimer = null;
+              window.location.reload();
+            }
+          } catch (e) { /* ignore transient network errors */ }
+        }, 4000);
       },
       onFileUploaded(ev) {
         const d = ev.detail || {};
@@ -656,6 +620,14 @@
             const labels = pipeline.missing_document_labels || pipeline.missing_documents || [];
             const intro = '{% filter escapejs %}{% trans "Les documents suivants sont requis pour compléter votre dossier :" %}{% endfilter %}';
             alert(labels.length ? (intro + '\n\n• ' + labels.join('\n• ')) : intro);
+            return;
+          }
+
+          if (data.queued) {
+            this.progressPct = 30;
+            this.analyzing = true;
+            this.progressHint = '{% filter escapejs %}{% trans "Analyse en cours en arrière-plan. Vous pouvez quitter cette page et revenir plus tard." %}{% endfilter %}';
+            this.startStatusPolling();
             return;
           }
 

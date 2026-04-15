@@ -35,6 +35,33 @@ def _is_video_or_legacy_face_upload(doc: ApplicationDocument) -> bool:
     return k in ("face_selfie", "liveness_video")
 
 
+def run_orchestration_by_pk(app_pk: int) -> None:
+    """
+    Background-safe wrapper for ThreadPoolExecutor: loads a fresh DB instance of the
+    application and runs the full orchestration pipeline.
+
+    Using pk instead of the ORM object avoids cross-thread Django DB connection issues.
+    On failure the application is marked REJECTED so the user is never stuck in PENDING.
+    """
+    import django.db
+
+    try:
+        app = LoanApplication.objects.get(pk=app_pk)
+        run_orchestration(app)
+    except LoanApplication.DoesNotExist:
+        logger.error("Background orchestration: application %s not found.", app_pk)
+    except Exception:
+        logger.exception("Background orchestration failed for application %s.", app_pk)
+        try:
+            LoanApplication.objects.filter(pk=app_pk).update(
+                status=LoanApplicationStatus.REJECTED
+            )
+        except Exception:
+            pass
+    finally:
+        django.db.close_old_connections()
+
+
 def run_orchestration(application: LoanApplication) -> LoanApplication:
     """
     Full pipeline: validate docs → analyze images/PDFs → score.
@@ -76,7 +103,7 @@ def run_orchestration(application: LoanApplication) -> LoanApplication:
             log("document_skipped", {"document_id": doc.id, "reason": "facial_recognition_disabled"})
             continue
         if path and path.is_file():
-            analysis = analyze_document_image(path, language=language)
+            analysis = analyze_document_image(path, language=language, application_created_at=application.created_at)
             doc.analysis_result = analysis
             doc.analyzed_at = timezone.now()
             doc.save(update_fields=["analysis_result", "analyzed_at"])

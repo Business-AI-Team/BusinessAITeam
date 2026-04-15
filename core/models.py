@@ -335,6 +335,22 @@ class LoanApplication(models.Model):
             return False
         return True
 
+    @property
+    def is_eligible(self) -> bool | None:
+        """
+        None  = score pas encore calculé.
+        True  = éligible (score ≥ seuil et pas de blocage).
+        False = non éligible.
+        """
+        if self.eligibility_score is None:
+            return None
+        detail = (self.roi_summary or {}).get("eligibility_detail") or {}
+        threshold = float(detail.get("threshold") or 55.0)
+        eligible = float(self.eligibility_score) >= threshold
+        if detail.get("address_blocker") or detail.get("identity_address_block"):
+            eligible = False
+        return eligible
+
     def __str__(self) -> str:
         return f"{self.reference} ({self.get_status_display()})"
 

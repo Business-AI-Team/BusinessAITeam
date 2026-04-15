@@ -137,6 +137,60 @@ def _rag_snippets_from_full_policy(full_policy: str, n: int = 4, max_len: int = 
 
 # ── LLM user advice ────────────────────────────────────────────────────────────
 
+_ISSUE_LABELS_FR: dict[str, str] = {
+    "address_mismatch": "Adresse incohérente : l'adresse de votre profil ne correspond pas à celle de votre justificatif de domicile. Corrigez votre profil ou fournissez un justificatif récent à votre nom.",
+    "income_mismatch": "Revenu incohérent : le montant extrait de vos bulletins de salaire diffère significativement des données de votre profil. Vérifiez que vos bulletins vous appartiennent bien.",
+    "payslip_months_outside_window": "Bulletins trop anciens : un ou plusieurs bulletins de salaire sont hors de la fenêtre des 3 derniers mois calendaires autorisés. Téléversez des bulletins récents.",
+    "payslip_months_not_distinct": "Bulletins en doublon : plusieurs bulletins couvrent le même mois. Chaque mois doit être représenté par un seul bulletin distinct.",
+    "payslip_dates_incomplete": "Dates illisibles : la période de certains bulletins est illisible ou absente. Fournissez des bulletins dont la date de période est clairement visible.",
+    "identity_name_mismatch": "Identité non concordante : le nom sur votre pièce d'identité (CIN/passeport) ne correspond pas au nom déclaré dans votre profil. Vérifiez que la pièce vous appartient bien.",
+    "payslip_name_mismatch": "Titulaire du bulletin incorrect : le nom du salarié sur votre bulletin de salaire ne correspond pas à votre nom de profil. Le bulletin doit être au nom du demandeur.",
+}
+
+_ISSUE_LABELS_EN: dict[str, str] = {
+    "address_mismatch": "Address mismatch: your profile address does not match your proof of address document. Update your profile or provide a recent document in your name.",
+    "income_mismatch": "Income mismatch: the amount extracted from your payslips differs significantly from your profile data. Make sure your payslips belong to you.",
+    "payslip_months_outside_window": "Payslips too old: one or more payslips fall outside the last 3 authorized calendar months. Please upload recent payslips.",
+    "payslip_months_not_distinct": "Duplicate payslip months: multiple payslips cover the same calendar month. Each month must be represented by a single distinct payslip.",
+    "payslip_dates_incomplete": "Unreadable dates: the period on some payslips is missing or unreadable. Provide payslips where the pay period is clearly visible.",
+    "identity_name_mismatch": "Identity mismatch: the name on your ID document (CIN/passport) does not match your declared profile name. Make sure the document belongs to you.",
+    "payslip_name_mismatch": "Wrong payslip holder: the employee name on your payslip does not match your profile name. Payslips must be in the applicant's name.",
+}
+
+
+def _normalize_advice_html(value: Any) -> str:
+    """
+    Convertit la valeur retournée par le LLM en HTML propre quel que soit le format :
+    - str HTML (déjà formaté) → retourné tel quel
+    - list[str]               → <ul><li>…</li></ul>
+    - str texte brut          → <ul> avec un <li> par ligne/point/numéro
+    """
+    import html as _html
+    if not value:
+        return ""
+    if isinstance(value, list):
+        items = "".join(
+            f"<li>{_html.escape(str(item).strip())}</li>"
+            for item in value
+            if str(item).strip()
+        )
+        return f'<ul class="list-disc space-y-1.5 pl-5">{items}</ul>'
+    if isinstance(value, str):
+        # Already contains HTML tags → trust it
+        if "<li" in value or "<ul" in value or "<p" in value:
+            return value
+        # Plain text: split on newlines or numbered items
+        lines = [ln.strip() for ln in value.strip().splitlines() if ln.strip()]
+        if len(lines) <= 1:
+            return f"<p>{_html.escape(value)}</p>"
+        items = "".join(
+            f"<li>{_html.escape(ln.lstrip('•-– ').lstrip('0123456789.) '))}</li>"
+            for ln in lines
+        )
+        return f'<ul class="list-disc space-y-1.5 pl-5">{items}</ul>'
+    return str(value)
+
+
 def _generate_user_advice(
     issues_list: list[dict],
     consistency: dict,
@@ -173,45 +227,34 @@ def _generate_user_advice(
         else "le client"
     )
 
+    # ── Application financial context ────────────────────────────────────────
+    amt = getattr(application, "amount_requested", None)
+    amt_ccy = getattr(application, "amount_currency", None) or "EUR"
+    months = getattr(application, "term_months", None)
+    income = getattr(application, "effective_annual_income", None)
+    income_ccy = (getattr(cust, "income_currency", None) or "EUR") if cust else "EUR"
+    application_block = (
+        f"\nDonnées de la demande :\n"
+        f"- Montant demandé : {amt} {amt_ccy}\n"
+        f"- Durée : {months} mois\n"
+        f"- Revenu annuel (extrait des documents) : {income} {income_ccy}\n"
+    )
+
     # ── Generic fallbacks (used when LLM is unavailable) ────────────────────
     def _fallback() -> tuple[str, str, str, str]:
-        has_addr = any(i.get("code") == "address_mismatch" for i in issues_list)
-        has_name = any("name" in (i.get("code") or "") for i in issues_list)
-        if has_addr and not has_name:
-            title_fr = "Action requise : adresse"
-            title_en = "Action required: address"
-            fr = (
-                "L'adresse de votre profil ne correspond pas à celle lue sur vos documents. "
-                "Corrigez l'adresse de votre profil ou fournissez un justificatif de domicile récent "
-                "à votre nom. Rappel : l'adresse sur la CIN ou le passeport n'est pas vérifiée ici."
-            )
-            en = (
-                "Your profile address does not match the address read on your documents. "
-                "Correct your profile address or provide a recent proof of address in your name. "
-                "Note: the address on your CIN or passport is not checked here."
-            )
-        elif has_name:
-            title_fr = "Action requise : identité"
-            title_en = "Action required: identity"
-            fr = (
-                "Le nom figurant sur un ou plusieurs documents ne correspond pas à celui de votre profil. "
-                "Vérifiez que vos pièces justificatives correspondent bien à votre identité déclarée."
-            )
-            en = (
-                "The name on one or more documents does not match your profile. "
-                "Please ensure your supporting documents match your declared identity."
-            )
-        else:
-            title_fr = "Action requise : incohérence dans les documents"
-            title_en = "Action required: document inconsistency"
-            fr = (
-                "Des incohérences ont été détectées entre vos documents et les informations de votre profil. "
-                "Veuillez vérifier et corriger vos pièces justificatives."
-            )
-            en = (
-                "Inconsistencies were detected between your documents and your profile information. "
-                "Please review and correct your supporting documents."
-            )
+        n = len(issues_list)
+        title_fr = f"{n} point{'s' if n > 1 else ''} à corriger dans votre dossier" if n > 1 else "Action requise sur votre dossier"
+        title_en = f"{n} issue{'s' if n > 1 else ''} to fix in your application" if n > 1 else "Action required on your application"
+        items_fr: list[str] = []
+        items_en: list[str] = []
+        for issue in issues_list:
+            code = issue.get("code") or ""
+            d_fr = issue.get("detail_fr") or _ISSUE_LABELS_FR.get(code, f"Problème détecté : {code}.")
+            d_en = issue.get("detail_en") or _ISSUE_LABELS_EN.get(code, f"Issue detected: {code}.")
+            items_fr.append(f"<li>{d_fr}</li>")
+            items_en.append(f"<li>{d_en}</li>")
+        fr = '<ul class="list-disc space-y-1.5 pl-5">' + "".join(items_fr) + "</ul>"
+        en = '<ul class="list-disc space-y-1.5 pl-5">' + "".join(items_en) + "</ul>"
         return fr, en, title_fr, title_en
 
     api_key = get_openai_api_key()
@@ -228,19 +271,29 @@ Politique institutionnelle (extrait) :
 
     prompt = f"""Tu es un assistant bancaire bienveillant. Le client « {customer_name} » a soumis une demande de prêt.
 {policy_block}
+{application_block}
 L'analyse automatique a détecté les incohérences suivantes dans ses documents :
 {issues_text}
 
-Règle importante : L'adresse figurant sur une CIN ou un passeport n'est JAMAIS comparée à l'adresse du profil. Seul un justificatif de domicile dédié (facture, relevé bancaire, quittance) est vérifié.
+Règle adresse : L'adresse figurant sur une CIN ou un passeport n'est JAMAIS comparée à l'adresse du profil. Seul un justificatif de domicile dédié (facture, relevé bancaire, quittance) est vérifié.
+Règle revenu : Le revenu n'est jamais saisi par le client — il est extrait automatiquement des bulletins de salaire.
 
-Ta mission : générer un message court (2-3 phrases) destiné au CLIENT pour lui expliquer clairement :
-1. Quel est le problème détecté
-2. Ce qu'il doit faire concrètement pour le corriger (en accord avec les exigences de la politique institutionnelle si disponible)
+Ta mission : générer un message destiné au CLIENT qui liste EXPLICITEMENT ET EXHAUSTIVEMENT TOUS les problèmes détectés ci-dessus, sans en omettre un seul.
+Pour CHAQUE problème détecté, tu dois :
+1. Nommer le problème clairement (ex. bulletin hors fenêtre de 3 mois, doublon de mois, nom différent sur le bulletin, adresse incohérente, etc.)
+2. Expliquer concrètement ce que le client doit faire pour le corriger
 
-Génère aussi un titre court (5-8 mots max) qui résume l'action requise.
+Si la politique institutionnelle est disponible, vérifie également si le montant demandé, la durée ou le revenu sont conformes aux critères (montant min/max, durée max, revenu minimum requis) et signale tout écart dans le message.
+
+IMPORTANT : Ne résume PAS en une phrase générale. Une entrée par problème.
+Si plusieurs problèmes sont détectés, tous doivent apparaître dans le message — même les moins graves.
+Respecte les exigences de la politique institutionnelle si disponible.
+
+Génère aussi un titre court (5-8 mots max) qui résume l'action requise (ex. "3 points à corriger dans votre dossier").
 
 Réponds UNIQUEMENT en JSON valide avec les clés : "title_fr", "title_en", "advice_fr", "advice_en".
-Pas de markdown, pas d'explications en dehors du JSON."""
+"advice_fr" et "advice_en" doivent être des chaînes HTML contenant une liste <ul><li>...</li></ul> avec un <li> par problème.
+Chaque <li> doit commencer par un titre court en <strong> suivi de la description. Pas de markdown, pas de texte hors du JSON."""
 
     try:
         from openai import OpenAI
@@ -250,7 +303,7 @@ Pas de markdown, pas d'explications en dehors du JSON."""
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
+            max_tokens=600,
             temperature=0.3,
         )
         text = (resp.choices[0].message.content or "").strip()
@@ -259,8 +312,8 @@ Pas de markdown, pas d'explications en dehors du JSON."""
         text = re.sub(r"\n?```$", "", text, flags=re.MULTILINE).strip()
         data = _json.loads(text)
         return (
-            data.get("advice_fr") or _fallback()[0],
-            data.get("advice_en") or _fallback()[1],
+            _normalize_advice_html(data.get("advice_fr")) or _fallback()[0],
+            _normalize_advice_html(data.get("advice_en")) or _fallback()[1],
             data.get("title_fr") or _fallback()[2],
             data.get("title_en") or _fallback()[3],
         )

@@ -469,6 +469,21 @@ msgstr "Référence"
 msgid "Rejected"
 msgstr "Refusé"
 
+msgid "Pending"
+msgstr "En attente d'analyse"
+
+msgid "Validated"
+msgstr "Validé"
+
+msgid "Analyse en cours…"
+msgstr "Analyse en cours…"
+
+msgid "Résultat disponible dans quelques instants"
+msgstr "Résultat disponible dans quelques instants"
+
+msgid "Analyse en cours en arrière-plan. Vous pouvez quitter cette page et revenir plus tard."
+msgstr "Analyse en cours en arrière-plan. Vous pouvez quitter cette page et revenir plus tard."
+
 msgid "Requirement"
 msgstr "Exigence"
 

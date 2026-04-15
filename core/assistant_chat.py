@@ -39,9 +39,9 @@ def _build_profile_context(user_email: str, application: LoanApplication | None,
         parts.append(f"Téléphone: {cust.phone or '(non renseigné)'}")
         parts.append(f"N° pièce d'identité (CIN): {cust.id_card or '(non renseigné)'}")
         if cust.annual_income and cust.annual_income > 0:
-            parts.append(f"Revenu annuel déclaré: {cust.annual_income} {cust.income_currency}")
+            parts.append(f"Revenu annuel estimé (extrait des documents par l'IA): {cust.annual_income} {cust.income_currency}")
         else:
-            parts.append("Revenu annuel déclaré: non renseigné")
+            parts.append("Revenu annuel: non encore extrait (l'IA le lira automatiquement depuis les bulletins de salaire uploadés)")
 
     parts.append(f"Référence demande: {application.reference}")
     parts.append(f"Type de prêt: {application.loan_type}")
@@ -260,6 +260,28 @@ def _build_system_prompt(
         "tu NE DOIS PAS le signaler comme un problème. Ne mentionne jamais les différences d'adresse CIN/passeport."
     )
 
+    income_rule = (
+        "RÈGLE REVENU (non négociable) : "
+        "Le revenu annuel du client N'EST JAMAIS saisi manuellement par l'utilisateur dans le formulaire. "
+        "Il est UNIQUEMENT extrait automatiquement par notre système depuis les documents fournis "
+        "(bulletins de salaire, relevés bancaires, etc.). "
+        "Si le client demande comment renseigner son revenu, explique-lui qu'il doit téléverser "
+        "ses bulletins de salaire — notre IA extraira le montant automatiquement. "
+        "Ne lui demande jamais de saisir un revenu manuellement."
+    )
+
+    exhaustivity_rule = (
+        "RÈGLE D'EXHAUSTIVITÉ (non négociable) : "
+        "Lorsqu'un dossier présente plusieurs problèmes, tu DOIS les mentionner TOUS sans exception. "
+        "Ne dis JAMAIS 'le seul problème est…' ou 'uniquement…' si d'autres problèmes existent dans les sources. "
+        "Liste chaque problème détecté sous forme de points distincts : "
+        "bulletins hors fenêtre des 3 derniers mois, bulletins en doublon (même mois), "
+        "nom du salarié différent du profil, nom sur la CIN différent du profil, "
+        "adresse incohérente sur le justificatif de domicile, revenu incohérent, montant demandé hors barème, etc. "
+        "Si SOURCE 3 (documents) contient des incohérences, liste-les toutes. "
+        "Un client doit pouvoir corriger SON DOSSIER EN UNE SEULE FOIS sans découvrir de nouveaux problèmes au fur et à mesure."
+    )
+
     role_instructions = _build_role_instructions(actor_role, application, lang)
     guide_ctx = _load_guide_text(actor_role, page_context)
     policy_ctx = _build_policy_context(user_message, loan_type)
@@ -300,6 +322,10 @@ Tu disposes de CINQ sources d'information que tu dois toutes utiliser pour répo
 SOURCE 0 = guide d'utilisation (admin) | SOURCE 1a = notre politique institutionnelle complète | SOURCE 1b = extraits pertinents | SOURCE 2 = profil/demande | SOURCE 3 = documents fournis.
 
 {address_rule}
+
+{income_rule}
+
+{exhaustivity_rule}
 
 LANGUE : L'application prend en charge le français et l'anglais.
 Par défaut, réponds en {default_lang}.
